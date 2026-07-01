@@ -1,5 +1,6 @@
-sourcePath = "/Users/murilo/Workspace/dotfiles"
-destination = "/Users/murilo"
+# chezmoi configuration
+# The source directory is the repo root (where this file lives).
+# Managed files are in the "dotfiles/" subdirectory.
 
 [edit]
   command = "code"
