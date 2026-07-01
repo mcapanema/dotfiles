@@ -1,12 +1,12 @@
-#!/bin/zsh
+#!/bin/sh
 set -e
 
 # ---------------------------- Constants ----------------------------
-readonly REPO_URL="https://github.com/mcapanema/dotfiles"
-readonly BREW_INSTALL_URL="https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh"
-readonly MARKER_FILE="$HOME/.dotfiles-installed"
-readonly CHEZMOI_SOURCE_DIR="${HOME}/.local/share/chezmoi"
-readonly DOTFILES_SUBDIR="dotfiles"
+REPO_URL="https://github.com/mcapanema/dotfiles"
+BREW_INSTALL_URL="https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh"
+MARKER_FILE="$HOME/.dotfiles-installed"
+CHEZMOI_SOURCE_DIR="${HOME}/.local/share/chezmoi"
+DOTFILES_SUBDIR="dotfiles"
 
 # ---------------------------- Messages ----------------------------
 info()  { echo "==> $*" }
@@ -16,8 +16,8 @@ success(){ echo "==> $*" }
 # ---------------------------- Check: already installed? ----------------------------
 is_installed(){
     # Check for marker file or chezmoi source with our repo's dotfiles subdirectory
-    [[ -f "$MARKER_FILE" ]] && return 0
-    [[ -d "${CHEZMOI_SOURCE_DIR}/${DOTFILES_SUBDIR}" ]] && return 0
+    [ -f "$MARKER_FILE" ] && return 0
+    [ -d "${CHEZMOI_SOURCE_DIR}/${DOTFILES_SUBDIR}" ] && return 0
     return 1
 }
 
@@ -51,6 +51,9 @@ fresh_install(){
     info "Applying dotfiles (source: ${DOTFILES_SUBDIR}/)..."
     chezmoi apply --source "${CHEZMOI_SOURCE_DIR}/${DOTFILES_SUBDIR}"
 
+    info "Running Claude Code installation..."
+    "${CHEZMOI_SOURCE_DIR}/claude/install.sh"
+
     info "Installing zplug..."
     if ! has zplug; then
         brew install zplug
@@ -59,7 +62,7 @@ fresh_install(){
     fi
 
     info "Installing zsh plugins..."
-    zsh -i -c "zplug install" 2>/dev/null || true
+    zplug install 2>/dev/null || true
 
     info "Importing iTerm2 preferences..."
     open "${CHEZMOI_SOURCE_DIR}/iterm2/Snazzy.itermcolors"
@@ -75,16 +78,15 @@ fresh_install(){
 update(){
     info "Update detected — pulling latest changes..."
 
-    if [[ ! -d "${CHEZMOI_SOURCE_DIR}/.git" ]]; then
+    if [ ! -d "${CHEZMOI_SOURCE_DIR}/.git" ]; then
         warn "Chezmoi source is not a git repo. Re-running fresh install."
         fresh_install
         return
     fi
 
     # Ensure remote points to our repo
-    local current_remote
     current_remote=$(git -C "$CHEZMOI_SOURCE_DIR" remote get-url origin 2>/dev/null || echo "")
-    if [[ "$current_remote" != "$REPO_URL" ]]; then
+    if [ "$current_remote" != "$REPO_URL" ]; then
         git -C "$CHEZMOI_SOURCE_DIR" remote add origin "$REPO_URL" 2>/dev/null \
             || git -C "$CHEZMOI_SOURCE_DIR" remote set-url origin "$REPO_URL"
     fi
@@ -94,6 +96,9 @@ update(){
 
     info "Applying updated dotfiles..."
     chezmoi apply --source "${CHEZMOI_SOURCE_DIR}/${DOTFILES_SUBDIR}"
+
+    info "Running Claude Code update..."
+    "${CHEZMOI_SOURCE_DIR}/claude/install.sh"
 
     success "Dotfiles updated successfully."
 }
