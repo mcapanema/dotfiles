@@ -1,0 +1,11 @@
+sourcePath = "/Users/murilo/Workspace/dotfiles"
+destination = "/Users/murilo"
+
+[edit]
+  command = "code"
+
+[add]
+  templateSymlinks = true
+
+[diff]
+  pager = "less -R"
