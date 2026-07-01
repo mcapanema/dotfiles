@@ -9,9 +9,9 @@ CHEZMOI_SOURCE_DIR="${HOME}/.local/share/chezmoi"
 DOTFILES_SUBDIR="dotfiles"
 
 # ---------------------------- Messages ----------------------------
-info()  { echo "==> $*" }
-warn()  { echo " WARNING: $*" }
-success(){ echo "==> $*" }
+info()  { echo "==> $*" ; }
+warn()  { echo " WARNING: $*" ; }
+success(){ echo "==> $*" ; }
 
 # ---------------------------- Check: already installed? ----------------------------
 is_installed(){
@@ -86,8 +86,8 @@ update(){
     # Ensure remote points to our repo
     current_remote=$(git -C "$CHEZMOI_SOURCE_DIR" remote get-url origin 2>/dev/null || echo "")
     if [ "$current_remote" != "$REPO_URL" ]; then
-        git -C "$CHEZMOI_SOURCE_DIR" remote add origin "$REPO_URL" 2>/dev/null \
-            || git -C "$CHEZMOI_SOURCE_DIR" remote set-url origin "$REPO_URL"
+        git -C "$CHEZMOI_SOURCE_DIR" remote add origin "$REPO_URL" 2>/dev/null || \
+            git -C "$CHEZMOI_SOURCE_DIR" remote set-url origin "$REPO_URL"
     fi
 
     info "Pulling latest changes..."
