@@ -1,6 +1,19 @@
 # dotfiles
 
-My personal dotfiles repository.
+My personal dotfiles repository, managed with [chezmoi](https://www.chezmoi.io/).
+
+## Quick Setup
+
+```shell
+# Initialize chezmoi with this repository
+chezmoi init --source="$HOME/Workspace/dotfiles"
+
+# Review changes before applying
+chezmoi diff
+
+# Apply all dotfiles
+chezmoi apply
+```
 
 ## Components
 
