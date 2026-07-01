@@ -4,3 +4,6 @@ export VISUAL=vim
 
 # Avoid duplicates in PATH
 typeset -U PATH
+
+# Source Claude API config from chezmoi-managed template
+source "$HOME/.local/share/chezmoi/claude/templates/.zshenv"
