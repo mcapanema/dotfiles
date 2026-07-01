@@ -5,7 +5,7 @@ My personal dotfiles repository, managed with [chezmoi](https://www.chezmoi.io/)
 ## Quick Setup
 
 ```shell
-sh -c "$(curl -fsSL https://raw.githubusercontent.com/mcapanema/dotfiles/refs/heads/main/install.sh)"
+sh -c "$(curl -fsSL https://raw.githubusercontent.com/mcapanema/dotfiles/main/install.sh)"
 ```
 
 ## Components
