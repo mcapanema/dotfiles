@@ -5,14 +5,7 @@ My personal dotfiles repository, managed with [chezmoi](https://www.chezmoi.io/)
 ## Quick Setup
 
 ```shell
-# Initialize chezmoi with this repository
-chezmoi init --source="$HOME/Workspace/dotfiles"
-
-# Review changes before applying
-chezmoi diff
-
-# Apply all dotfiles
-chezmoi apply
+sh -c "$(curl -fsSL https://raw.githubusercontent.com/mcapanema/dotfiles/refs/heads/main/install.sh)"
 ```
 
 ## Components

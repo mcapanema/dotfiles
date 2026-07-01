@@ -66,8 +66,7 @@ fresh_install(){
 
     info "Importing iTerm2 preferences..."
     open "${CHEZMOI_SOURCE_DIR}/iterm2/Snazzy.itermcolors"
-    cp "${CHEZMOI_SOURCE_DIR}/iterm2/com.googlecode.iterm2.plist \
-        ~/Library/Preferences/
+    cp "${CHEZMOI_SOURCE_DIR}/iterm2/com.googlecode.iterm2.plist" ~/Library/Preferences/
 
     # Mark as installed
     touch "$MARKER_FILE"
