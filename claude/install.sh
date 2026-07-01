@@ -6,9 +6,9 @@ CLAUDE_STATUSLINE_SOURCE="$(dirname "$0")/statusline-command.sh"
 CLAUDE_CONFIG_TARGET="$HOME/.config/claude-code"
 CLAUDE_TARGET="$HOME/.claude"
 
-info()  { echo "==> $*" }
-warn()  { echo " WARNING: $*" }
-success(){ echo "==> $*" }
+info()  { echo "==> $*"; }
+warn()  { echo " WARNING: $*"; }
+success(){ echo "==> $*"; }
 
 has() { command -v "$1" >/dev/null 2>&1; }
 
