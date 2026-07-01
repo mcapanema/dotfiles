@@ -6,6 +6,4 @@ export VISUAL=vim
 typeset -U PATH
 
 # Source Claude API config from chezmoi-managed template
-if [ -f "$HOME/.local/share/chezmoi/claude/templates/.zshenv" ]; then
-    source "$HOME/.local/share/chezmoi/claude/templates/.zshenv"
-fi
+source "$HOME/.local/share/chezmoi/claude/templates/.zshenv"
