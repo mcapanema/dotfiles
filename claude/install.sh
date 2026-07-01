@@ -10,7 +10,7 @@ info()  { echo "==> $*" }
 warn()  { echo " WARNING: $*" }
 success(){ echo "==> $*" }
 
-has() { command -v "$1" >/dev/null 2>&1 }
+has() { command -v "$1" >/dev/null 2>&1; }
 
 install_claude_code() {
     if ! has claude; then
