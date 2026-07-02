@@ -26,7 +26,7 @@ backup_and_symlink() {
     target_path="$2"
     backup="${target_path}.backup-$(date +%Y%m%d%H%M%S)"
 
-    if [ -e "$target_path" ]; then
+    if [ -e "$target_path" ] || [ -L "$target_path" ]; then
         if [ -L "$target_path" ]; then
             info "Removing old symlink: $target_path"
             rm "$target_path"
@@ -44,6 +44,7 @@ install_configs() {
     info "Setting up Claude Code configuration..."
 
     backup_and_symlink "$CLAUDE_CONFIG_SOURCE" "$CLAUDE_CONFIG_TARGET"
+    mkdir -p "$CLAUDE_TARGET"
     backup_and_symlink "$CLAUDE_STATUSLINE_SOURCE" "$CLAUDE_TARGET/statusline-command.sh"
 
     info "Making statusline script executable..."

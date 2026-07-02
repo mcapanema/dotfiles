@@ -91,7 +91,7 @@ update(){
     fi
 
     info "Pulling latest changes..."
-    git -C "$CHEZMOI_SOURCE_DIR" pull --ff --autorebase
+    git -C "$CHEZMOI_SOURCE_DIR" pull --rebase --autostash
 
     info "Applying updated dotfiles..."
     chezmoi apply --source "${CHEZMOI_SOURCE_DIR}/${DOTFILES_SUBDIR}"
