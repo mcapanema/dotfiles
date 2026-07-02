@@ -29,7 +29,7 @@ has(){
 fresh_install(){
     info "Fresh install detected — setting up dotfiles..."
 
-    DOTFILES_DIR="$(cd "$(dirname "$0")" && pwd)"
+    DOTFILES_DIR="$HOME/.dotfiles"
 
     # 1. Homebrew
     if ! has brew; then
@@ -152,6 +152,16 @@ main(){
     echo "dotfiles bootstrap"
     echo "=================="
     echo ""
+
+    DOTFILES_DIR="$HOME/.dotfiles"
+    if [ ! -d "$DOTFILES_DIR/.git" ]; then
+        info "Cloning dotfiles into $DOTFILES_DIR..."
+        git clone --depth 1 "$REPO_URL" "$DOTFILES_DIR"
+        cd "$DOTFILES_DIR"
+    else
+        info "Dotfiles already present at $DOTFILES_DIR, skipping clone."
+        cd "$DOTFILES_DIR"
+    fi
 
     if is_installed; then
         update
