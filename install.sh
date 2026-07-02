@@ -21,8 +21,20 @@ is_installed(){
 }
 
 # ---------------------------- Check: binary ----------------------------
-has(){
-    command -v "$1" >/dev/null 2>&1
+has_brew() {
+    command -v brew >/dev/null 2>&1
+}
+
+has_iterm2() {
+    has_brew && brew list --cask iterm2 >/dev/null 2>&1
+}
+
+has_zplug() {
+    has_brew && brew list zplug >/dev/null 2>&1
+}
+
+has_chezmoi() {
+    command -v chezmoi >/dev/null 2>&1
 }
 
 # ---------------------------- Fresh install ----------------------------
@@ -32,16 +44,17 @@ fresh_install(){
     DOTFILES_DIR="$HOME/.dotfiles"
 
     # 1. Homebrew
-    if ! has brew; then
+    if ! has_brew; then
         info "Installing Homebrew..."
         /bin/bash -c "$(curl -fsSL "$BREW_INSTALL_URL")"
-        eval "$(/opt/homebrew/bin/brew shellenv)"
+        BREW_BIN=$(command -v brew)
+        [ -n "$BREW_BIN" ] && eval "$($BREW_BIN shellenv)"
     else
         info "Homebrew already installed, skipping."
     fi
 
     # 2. iTerm2
-    if ! has iterm2; then
+    if ! has_iterm2; then
         info "Installing iTerm2..."
         brew install --cask iterm2
     else
@@ -71,7 +84,7 @@ fresh_install(){
     fi
 
     # 5. zplug
-    if ! has zplug; then
+    if ! has_zplug; then
         info "Installing zplug..."
         brew install zplug
     else
@@ -79,7 +92,7 @@ fresh_install(){
     fi
 
     # 6. chezmoi
-    if ! has chezmoi; then
+    if ! has_chezmoi; then
         info "Installing chezmoi..."
         brew install chezmoi
     else
@@ -131,6 +144,16 @@ update(){
 
     info "Pulling latest changes..."
     git -C "$CHEZMOI_SOURCE_DIR" pull --rebase --autostash
+
+    if ! has_chezmoi; then
+        info "Installing chezmoi..."
+        brew install chezmoi
+    fi
+
+    if ! has_zplug; then
+        info "Installing zplug..."
+        brew install zplug
+    fi
 
     info "Applying updated dotfiles..."
     chezmoi apply --source "${CHEZMOI_SOURCE_DIR}/${DOTFILES_SUBDIR}"
