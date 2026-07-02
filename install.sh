@@ -35,6 +35,7 @@ fresh_install(){
     if ! has brew; then
         info "Installing Homebrew..."
         /bin/bash -c "$(curl -fsSL "$BREW_INSTALL_URL")"
+        eval "$(/opt/homebrew/bin/brew shellenv)"
     else
         info "Homebrew already installed, skipping."
     fi
