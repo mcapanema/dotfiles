@@ -75,6 +75,10 @@ fresh_install(){
     mkdir -p "$SNAZZY_DIR"
     cp "${DOTFILES_DIR}/iterm2/Snazzy.itermcolors" "${SNAZZY_DIR}/Snazzy.itermcolors"
 
+    # 3b. Force-apply Snazzy to the Default Profile so it works without
+    # manual selection (independent of Dynamic Profiles).
+    sh "${DOTFILES_DIR}/iterm2/apply-snazzy.sh"
+
     # 4. Oh My Zsh
     if [ ! -d "$HOME/.oh-my-zsh" ]; then
         info "Installing Oh My Zsh..."
@@ -163,6 +167,11 @@ update(){
         cp "${CHEZMOI_SOURCE_DIR}/${DOTFILES_SUBDIR}/.zshrc" "$HOME/.zshrc"
     fi
 
+    # Re-apply Snazzy to the Default Profile
+    if [ -f "${HOME}/Library/Application Support/iTerm2/DynamicProfiles/Snazzy.itermcolors" ]; then
+        sh "${DOTFILES_DIR}/iterm2/apply-snazzy.sh" || true
+    fi
+
     info "Re-running zplug install..."
     zsh -c 'source "${HOME}/.zshrc" && zplug install' 2>/dev/null || true
 
@@ -194,9 +203,8 @@ main(){
 
     echo ""
     echo "Done! Next steps:"
-    echo "  1. Restart iTerm2"
-    echo "  2. Select Snazzy theme: iTerm2 → Preferences → Profiles → Colors → Color Presets → Snazzy"
-    echo "  3. Restart zsh"
+    echo "  1. Restart iTerm2 (Snazzy is already applied to the Default Profile)"
+    echo "  2. Restart zsh"
     echo ""
 }
 
