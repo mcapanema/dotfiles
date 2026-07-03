@@ -69,15 +69,16 @@ fresh_install(){
         info "Dotfiles repo already exists, skipping clone."
     fi
 
-    # 3. iTerm2 Snazzy theme (Dynamic Profile format)
-    SNAZZY_DIR="${HOME}/Library/Application Support/iTerm2/DynamicProfiles"
-    info "Installing Snazzy theme for iTerm2..."
-    mkdir -p "$SNAZZY_DIR"
-    cp "${DOTFILES_DIR}/iterm2/Snazzy.itermcolors" "${SNAZZY_DIR}/Snazzy.itermcolors"
-
-    # 3b. Force-apply Snazzy to the Default Profile so it works without
-    # manual selection (independent of Dynamic Profiles).
-    sh "${DOTFILES_DIR}/iterm2/apply-snazzy.sh"
+    # 3. iTerm2 Snazzy theme — force-applied to the Default Profile.
+    # Note: we deliberately do NOT copy this into
+    # ~/Library/Application Support/iTerm2/DynamicProfiles/, because the
+    # colors file embeds a fixed GUID that conflicts with the default
+    # bookmark's GUID and triggers:
+    #   "Dynamic profile with Guid ... conflicts with non-dynamic profile
+    #    with same Guid"
+    # apply-snazzy.sh reads from the dotfiles repo directly.
+    COLORS_SRC="${CHEZMOI_SOURCE_DIR}/${DOTFILES_SUBDIR}/iterm2/Snazzy.itermcolors"
+    sh "${CHEZMOI_SOURCE_DIR}/${DOTFILES_SUBDIR}/iterm2/apply-snazzy.sh"
 
     # 4. Oh My Zsh
     if [ ! -d "$HOME/.oh-my-zsh" ]; then
@@ -168,8 +169,8 @@ update(){
     fi
 
     # Re-apply Snazzy to the Default Profile
-    if [ -f "${HOME}/Library/Application Support/iTerm2/DynamicProfiles/Snazzy.itermcolors" ]; then
-        sh "${DOTFILES_DIR}/iterm2/apply-snazzy.sh" || true
+    if [ -f "${CHEZMOI_SOURCE_DIR}/${DOTFILES_SUBDIR}/iterm2/Snazzy.itermcolors" ]; then
+        sh "${CHEZMOI_SOURCE_DIR}/${DOTFILES_SUBDIR}/iterm2/apply-snazzy.sh" || true
     fi
 
     info "Re-running zplug install..."

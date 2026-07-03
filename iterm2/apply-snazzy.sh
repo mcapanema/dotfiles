@@ -1,16 +1,16 @@
 #!/bin/sh
 # Apply the Snazzy color preset directly into the iTerm2 Default Profile
-# (New Bookmarks[0]) so it is active on launch, independent of Dynamic Profiles.
+# (New Bookmarks[0]) so it is active on launch.
 #
-# Reads from: ~/Library/Application Support/iTerm2/DynamicProfiles/Snazzy.itermcolors
-# Writes to:  ~/Library/Preferences/com.googlecode.iterm2.plist
+# Reads from: $HOME/.dotfiles/iterm2/Snazzy.itermcolors
+# Writes to:  $HOME/Library/Preferences/com.googlecode.iterm2.plist
 #
 # Safe to run multiple times. Backs up the plist before writing.
 
 set -e
 
 PLIST="$HOME/Library/Preferences/com.googlecode.iterm2.plist"
-COLORS_FILE="$HOME/Library/Application Support/iTerm2/DynamicProfiles/Snazzy.itermcolors"
+COLORS_FILE="$HOME/.dotfiles/iterm2/Snazzy.itermcolors"
 
 if [ ! -f "$COLORS_FILE" ]; then
     echo "ERROR: Snazzy colors not found at $COLORS_FILE" >&2
