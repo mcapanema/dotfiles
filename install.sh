@@ -104,9 +104,10 @@ fresh_install(){
         cp "${DOTFILES_DIR}/${DOTFILES_SUBDIR}/.zshrc" "$HOME/.zshrc"
     fi
 
-    # 8. zplug install (run in zsh)
+    # 8. zplug install (run in zsh, without Oh My Zsh interference)
     info "Installing zsh plugins..."
-    zsh -c 'source "${HOME}/.zshrc" && zplug install' 2>/dev/null || true
+    ZPLUG_HOME=$(brew --prefix)/opt/zplug
+    zsh -c "source $ZPLUG_HOME/init.zsh && zplug install"
 
     # 9. Set zsh as default shell
     if [ "$SHELL" != "/bin/zsh" ]; then
@@ -170,7 +171,8 @@ update(){
     fi
 
     info "Re-running zplug install..."
-    zsh -c 'source "${HOME}/.zshrc" && zplug install' 2>/dev/null || true
+    ZPLUG_HOME=$(brew --prefix)/opt/zplug
+    zsh -c "source $ZPLUG_HOME/init.zsh && zplug install"
 
     success "Dotfiles updated successfully."
 }
