@@ -5,7 +5,7 @@ set -e
 REPO_URL="https://github.com/mcapanema/dotfiles"
 BREW_INSTALL_URL="https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh"
 MARKER_FILE="$HOME/.dotfiles-installed"
-CHEZMOI_SOURCE_DIR="${HOME}/.local/share/chezmoi"
+DOTFILES_DIR="${HOME}/.dotfiles"
 DOTFILES_SUBDIR="dotfiles"
 
 # ---------------------------- Messages ----------------------------
@@ -16,7 +16,7 @@ success(){ echo "==> $*" ; }
 # ---------------------------- Check: already installed? ----------------------------
 is_installed(){
     [ -f "$MARKER_FILE" ] && return 0
-    [ -d "${CHEZMOI_SOURCE_DIR}/${DOTFILES_SUBDIR}" ] && return 0
+    [ -d "${DOTFILES_DIR}/${DOTFILES_SUBDIR}" ] && return 0
     return 1
 }
 
@@ -41,8 +41,6 @@ has_chezmoi() {
 fresh_install(){
     info "Fresh install detected — setting up dotfiles..."
 
-    DOTFILES_DIR="$HOME/.dotfiles"
-
     # 1. Homebrew
     if ! has_brew; then
         info "Installing Homebrew..."
@@ -61,14 +59,6 @@ fresh_install(){
         info "iTerm2 already installed, skipping."
     fi
 
-    # 7. Clone dotfiles repo (needed for theme and subsequent steps)
-    if [ ! -d "$CHEZMOI_SOURCE_DIR/.git" ]; then
-        info "Cloning dotfiles repo..."
-        git clone --depth 1 "$REPO_URL" "$CHEZMOI_SOURCE_DIR"
-    else
-        info "Dotfiles repo already exists, skipping clone."
-    fi
-
     # 3. iTerm2 Snazzy theme — force-applied to the Default Profile.
     # Note: we deliberately do NOT copy this into
     # ~/Library/Application Support/iTerm2/DynamicProfiles/, because the
@@ -77,8 +67,8 @@ fresh_install(){
     #   "Dynamic profile with Guid ... conflicts with non-dynamic profile
     #    with same Guid"
     # apply-snazzy.sh reads from the dotfiles repo directly.
-    COLORS_SRC="${CHEZMOI_SOURCE_DIR}/${DOTFILES_SUBDIR}/iterm2/Snazzy.itermcolors"
-    sh "${CHEZMOI_SOURCE_DIR}/${DOTFILES_SUBDIR}/iterm2/apply-snazzy.sh"
+    COLORS_SRC="${DOTFILES_DIR}/iterm2/Snazzy.itermcolors"
+    sh "${DOTFILES_DIR}/iterm2/apply-snazzy.sh"
 
     # 4. Oh My Zsh
     if [ ! -d "$HOME/.oh-my-zsh" ]; then
@@ -106,12 +96,12 @@ fresh_install(){
 
     # 8. Apply dotfiles
     info "Applying dotfiles (source: ${DOTFILES_SUBDIR}/)..."
-    chezmoi apply --source "${CHEZMOI_SOURCE_DIR}/${DOTFILES_SUBDIR}"
+    chezmoi apply --source "${DOTFILES_DIR}/${DOTFILES_SUBDIR}"
 
     # Ensure .zshrc is copied (chezmoi may not overwrite existing files)
-    if [ -f "${CHEZMOI_SOURCE_DIR}/${DOTFILES_SUBDIR}/.zshrc" ]; then
+    if [ -f "${DOTFILES_DIR}/${DOTFILES_SUBDIR}/.zshrc" ]; then
         info "Copying .zshrc from dotfiles..."
-        cp "${CHEZMOI_SOURCE_DIR}/${DOTFILES_SUBDIR}/.zshrc" "$HOME/.zshrc"
+        cp "${DOTFILES_DIR}/${DOTFILES_SUBDIR}/.zshrc" "$HOME/.zshrc"
     fi
 
     # 9. zplug install (run in zsh)
@@ -135,20 +125,20 @@ fresh_install(){
 update(){
     info "Update detected — pulling latest changes..."
 
-    if [ ! -d "${CHEZMOI_SOURCE_DIR}/.git" ]; then
+    if [ ! -d "${DOTFILES_DIR}/.git" ]; then
         warn "Chezmoi source is not a git repo. Re-running fresh install."
         fresh_install
         return
     fi
 
-    current_remote=$(git -C "$CHEZMOI_SOURCE_DIR" remote get-url origin 2>/dev/null || echo "")
+    current_remote=$(git -C "$DOTFILES_DIR" remote get-url origin 2>/dev/null || echo "")
     if [ "$current_remote" != "$REPO_URL" ]; then
-        git -C "$CHEZMOI_SOURCE_DIR" remote add origin "$REPO_URL" 2>/dev/null || \
-            git -C "$CHEZMOI_SOURCE_DIR" remote set-url origin "$REPO_URL"
+        git -C "$DOTFILES_DIR" remote add origin "$REPO_URL" 2>/dev/null || \
+            git -C "$DOTFILES_DIR" remote set-url origin "$REPO_URL"
     fi
 
     info "Pulling latest changes..."
-    git -C "$CHEZMOI_SOURCE_DIR" pull --rebase --autostash
+    git -C "$DOTFILES_DIR" pull --rebase --autostash
 
     if ! has_chezmoi; then
         info "Installing chezmoi..."
@@ -161,16 +151,16 @@ update(){
     fi
 
     info "Applying updated dotfiles..."
-    chezmoi apply --source "${CHEZMOI_SOURCE_DIR}/${DOTFILES_SUBDIR}"
+    chezmoi apply --source "${DOTFILES_DIR}/${DOTFILES_SUBDIR}"
 
     # Ensure .zshrc is updated
-    if [ -f "${CHEZMOI_SOURCE_DIR}/${DOTFILES_SUBDIR}/.zshrc" ]; then
-        cp "${CHEZMOI_SOURCE_DIR}/${DOTFILES_SUBDIR}/.zshrc" "$HOME/.zshrc"
+    if [ -f "${DOTFILES_DIR}/${DOTFILES_SUBDIR}/.zshrc" ]; then
+        cp "${DOTFILES_DIR}/${DOTFILES_SUBDIR}/.zshrc" "$HOME/.zshrc"
     fi
 
     # Re-apply Snazzy to the Default Profile
-    if [ -f "${CHEZMOI_SOURCE_DIR}/${DOTFILES_SUBDIR}/iterm2/Snazzy.itermcolors" ]; then
-        sh "${CHEZMOI_SOURCE_DIR}/${DOTFILES_SUBDIR}/iterm2/apply-snazzy.sh" || true
+    if [ -f "${DOTFILES_DIR}/iterm2/Snazzy.itermcolors" ]; then
+        sh "${DOTFILES_DIR}/iterm2/apply-snazzy.sh" || true
     fi
 
     info "Re-running zplug install..."
@@ -186,7 +176,6 @@ main(){
     echo "=================="
     echo ""
 
-    DOTFILES_DIR="$HOME/.dotfiles"
     if [ ! -d "$DOTFILES_DIR/.git" ]; then
         info "Cloning dotfiles into $DOTFILES_DIR..."
         git clone --depth 1 "$REPO_URL" "$DOTFILES_DIR"
