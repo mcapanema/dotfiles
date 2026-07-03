@@ -2,7 +2,7 @@
 set -e
 
 # ---------------------------- Constants ----------------------------
-REPO_URL="https://github.com/mcapanema/dotfiles"
+REPO_URL="git@github.com:mcapanema/dotfiles.git"
 BREW_INSTALL_URL="https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh"
 MARKER_FILE="$HOME/.dotfiles-installed"
 DOTFILES_DIR="${HOME}/.dotfiles"
@@ -59,7 +59,15 @@ fresh_install(){
         info "iTerm2 already installed, skipping."
     fi
 
-    # 3. iTerm2 Snazzy theme — force-applied to the Default Profile.
+    # 3. Oh My Zsh
+    if [ ! -d "$HOME/.oh-my-zsh" ]; then
+        info "Installing Oh My Zsh..."
+        git clone --depth 1 https://github.com/ohmyzsh/ohmyzsh.git "$HOME/.oh-my-zsh"
+    else
+        info "Oh My Zsh already installed, skipping."
+    fi
+
+    # 4. iTerm2 Snazzy theme — force-applied to the Default Profile.
     # Note: we deliberately do NOT copy this into
     # ~/Library/Application Support/iTerm2/DynamicProfiles/, because the
     # colors file embeds a fixed GUID that conflicts with the default
@@ -69,14 +77,6 @@ fresh_install(){
     # apply-snazzy.sh reads from the dotfiles repo directly.
     COLORS_SRC="${DOTFILES_DIR}/iterm2/Snazzy.itermcolors"
     sh "${DOTFILES_DIR}/iterm2/apply-snazzy.sh"
-
-    # 4. Oh My Zsh
-    if [ ! -d "$HOME/.oh-my-zsh" ]; then
-        info "Installing Oh My Zsh..."
-        RUNZSH=no sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
-    else
-        info "Oh My Zsh already installed, skipping."
-    fi
 
     # 5. zplug
     if ! has_zplug; then
@@ -94,7 +94,7 @@ fresh_install(){
         info "chezmoi already installed, skipping."
     fi
 
-    # 8. Apply dotfiles
+    # 7. Apply dotfiles
     info "Applying dotfiles (source: ${DOTFILES_SUBDIR}/)..."
     chezmoi apply --source "${DOTFILES_DIR}/${DOTFILES_SUBDIR}"
 
@@ -104,11 +104,11 @@ fresh_install(){
         cp "${DOTFILES_DIR}/${DOTFILES_SUBDIR}/.zshrc" "$HOME/.zshrc"
     fi
 
-    # 9. zplug install (run in zsh)
+    # 8. zplug install (run in zsh)
     info "Installing zsh plugins..."
     zsh -c 'source "${HOME}/.zshrc" && zplug install' 2>/dev/null || true
 
-    # 10. Set zsh as default shell
+    # 9. Set zsh as default shell
     if [ "$SHELL" != "/bin/zsh" ]; then
         info "Setting zsh as default shell..."
         chsh -s /bin/zsh
@@ -148,6 +148,12 @@ update(){
     if ! has_zplug; then
         info "Installing zplug..."
         brew install zplug
+    fi
+
+    if [ ! -d "$HOME/.oh-my-zsh" ]; then
+        warn "Oh My Zsh missing — re-running fresh install."
+        fresh_install
+        return
     fi
 
     info "Applying updated dotfiles..."
