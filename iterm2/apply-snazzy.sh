@@ -14,7 +14,6 @@ COLORS_FILE="$HOME/.dotfiles/iterm2/Snazzy.itermcolors"
 
 if [ ! -f "$COLORS_FILE" ]; then
     echo "ERROR: Snazzy colors not found at $COLORS_FILE" >&2
-    echo "       Copy Snazzy.itermcolors there before running this script." >&2
     exit 1
 fi
 
@@ -56,11 +55,18 @@ target = bookmarks[0]
 for k, v in profile.items():
     target[k] = v
 
-for variant_key in ("Background Color (Dark)", "Background Color (Light)",
-                    "Foreground Color (Dark)", "Foreground Color (Light)",
-                    "Cursor Color (Dark)", "Cursor Color (Light)",
-                    "Selection Color (Dark)", "Selection Color (Light)"):
-    target.pop(variant_key, None)
+for key in ("Background Color", "Foreground Color", "Cursor Color", "Selection Color",
+            "Bold Color", "Link Color", "Cursor Text Color", "Selected Text Color",
+            "Badge Color",
+            "Ansi 0 Color", "Ansi 1 Color", "Ansi 2 Color", "Ansi 3 Color",
+            "Ansi 4 Color", "Ansi 5 Color", "Ansi 6 Color", "Ansi 7 Color",
+            "Ansi 8 Color", "Ansi 9 Color", "Ansi 10 Color", "Ansi 11 Color",
+            "Ansi 12 Color", "Ansi 13 Color", "Ansi 14 Color", "Ansi 15 Color",
+            "Cursor Guide Color", "Match Background Color"):
+    for variant in (" (Dark)", " (Light)"):
+        full_key = key + variant
+        if key in target:
+            target[full_key] = dict(target[key])
 
 target_guid = target.get("Guid") or str(uuid.uuid4()).upper()
 target["Guid"] = target_guid
@@ -68,6 +74,7 @@ prefs["Default Bookmark Guid"] = target_guid
 target["Default Bookmark"] = "Yes"
 target["Name"] = "Snazzy"
 target["Description"] = "Default"
+target["Use Separate Colors for Light and Dark Mode"] = True
 
 bookmarks[0] = target
 prefs["New Bookmarks"] = bookmarks
