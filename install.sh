@@ -16,7 +16,6 @@ success(){ echo "==> $*" ; }
 # ---------------------------- Check: already installed? ----------------------------
 is_installed(){
     [ -f "$MARKER_FILE" ] && return 0
-    [ -d "${DOTFILES_DIR}/${DOTFILES_SUBDIR}" ] && return 0
     return 1
 }
 
