@@ -36,7 +36,8 @@ import sys, plistlib, uuid
 plist_path, colors_path = sys.argv[1], sys.argv[2]
 
 with open(colors_path, "rb") as f:
-    profile = plistlib.load(f)["Profiles"][0]
+    data = plistlib.load(f)
+    profile = data["Profiles"][0] if "Profiles" in data else data
 
 try:
     with open(plist_path, "rb") as f:
@@ -49,17 +50,18 @@ if not bookmarks:
     bookmarks = [{}]
 else:
     bookmarks = list(bookmarks)
-    while len(bookmarks) < 1:
-        bookmarks.append({})
 
 target = bookmarks[0]
 
-# Merge all Snazzy keys into the default bookmark first
 for k, v in profile.items():
     target[k] = v
 
-# Now ensure we have a stable GUID and Default markers.
-# If the colors file already supplies a Guid, reuse it; otherwise generate one.
+for variant_key in ("Background Color (Dark)", "Background Color (Light)",
+                    "Foreground Color (Dark)", "Foreground Color (Light)",
+                    "Cursor Color (Dark)", "Cursor Color (Light)",
+                    "Selection Color (Dark)", "Selection Color (Light)"):
+    target.pop(variant_key, None)
+
 target_guid = target.get("Guid") or str(uuid.uuid4()).upper()
 target["Guid"] = target_guid
 prefs["Default Bookmark Guid"] = target_guid
