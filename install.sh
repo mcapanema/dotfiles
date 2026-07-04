@@ -45,8 +45,11 @@ fresh_install(){
     if ! has_brew; then
         info "Installing Homebrew..."
         /bin/bash -c "$(curl -fsSL "$BREW_INSTALL_URL")"
-        BREW_BIN=$(command -v brew)
-        [ -n "$BREW_BIN" ] && eval "$($BREW_BIN shellenv)"
+        if [ -x "/opt/homebrew/bin/brew" ]; then
+            eval "$(/opt/homebrew/bin/brew shellenv)"
+        elif [ -x "/usr/local/bin/brew" ]; then
+            eval "$(/usr/local/bin/brew shellenv)"
+        fi
     else
         info "Homebrew already installed, skipping."
     fi
