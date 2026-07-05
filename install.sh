@@ -1,49 +1,127 @@
 #!/bin/sh
-set -e
+# Bootstrap script for the mcapanema/dotfiles setup.
+#
+# On a fresh machine it:
+#   1. Ensures macOS build tools (git) are available via CLT.
+#   2. Installs Homebrew if missing.
+#   3. Clones / updates the dotfiles repo.
+#   4. Installs Homebrew-managed tools (iterm2, chezmoi, zplug …).
+#   5. Runs chezmoi apply to materialise the managed dotfiles.
+#   6. Marks the install complete so later runs go via the update path.
+#
+# Safe to re-run; the install vs. update path is determined by whether
+# $HOME/.dotfiles-installed exists.
+
+set -eu
+set -o pipefail
 
 # ---------------------------- Constants ----------------------------
 REPO_URL="https://github.com/mcapanema/dotfiles.git"
 BREW_INSTALL_URL="https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh"
 MARKER_FILE="$HOME/.dotfiles-installed"
-DOTFILES_DIR="${HOME}/.dotfiles"
-DOTFILES_SUBDIR="dotfiles"
+DOTFILES_DIR="$HOME/.dotfiles"
+DOTFILES_SOURCE_SUBDIR="dotfiles"
 
-# ---------------------------- Messages ----------------------------
+# ---------------------------- Helpers ----------------------------
 info()  { echo "==> $*" ; }
 warn()  { echo " WARNING: $*" ; }
-success(){ echo "==> $*" ; }
+fail()  { echo "ERROR: $*" >&2; exit 1 ; }
 
-# ---------------------------- Check: already installed? ----------------------------
-is_installed(){
-    [ -f "$MARKER_FILE" ] && return 0
-    return 1
-}
-
-# ---------------------------- Check: binary ----------------------------
+# has_brew   — true if Homebrew is on PATH
 has_brew() {
     command -v brew >/dev/null 2>&1
 }
 
+# has_iterm2 — true if the Homebrew cask is installed
 has_iterm2() {
     has_brew && brew list --cask iterm2 >/dev/null 2>&1
 }
 
+# has_zplug  — true if the Homebrew formula is installed
 has_zplug() {
     has_brew && brew list zplug >/dev/null 2>&1
 }
 
+# has_chezmoi — true if chezmoi binary is on PATH
 has_chezmoi() {
     command -v chezmoi >/dev/null 2>&1
 }
 
+# ---------------------------- Pre-flight: build tools ----------------------------
+# On a completely fresh macOS install git is only available after the
+# Command Line Tools package is installed.  CLT ships a git binary at
+# /Library/Developer/CommandLineTools/usr/bin/git that is on PATH once
+# xcode-select has been run.  This function:
+#   1. Checks whether git already resolves (fast path on a configured box).
+#   2. If not, tries to install CLT silently via softwareupdate(8)'s
+#      --agree-to-license flag (works on macOS 13+ without user interaction).
+#   3. Falls back to opening the standard GUI installer if step 2 fails.
+#      The script blocks until the user dismisses the dialog or a 3-minute
+#      timeout expires — this is the only interactive step that cannot be
+#      avoided on a completely fresh machine.
+ensure_build_tools() {
+    if command -v git >/dev/null 2>&1; then
+        info "git already available, skipping CLT setup."
+        return 0
+    fi
+
+    info "git not found — ensuring Command Line Tools..."
+
+    # Attempt silent install (no GUI) via softwareupdate(8).
+    # --agree-to-license skips the licence prompt on macOS 13+.
+    # We try twice because the package label may or may not carry a
+    # version suffix (e.g. "Command Line Tools for Xcode" vs
+    # "Command Line Tools for Xcode 26.5").
+    _clt_installed=0
+    for _ in 1 2; do
+        if softwareupdate --install --agree-to-license -r \
+            "Command Line Tools for Xcode" >/dev/null 2>&1; then
+            _clt_installed=1
+            break
+        fi
+        sleep 2
+    done
+
+    if [ "$_clt_installed" -eq 1 ]; then
+        info "Command Line Tools installed silently."
+    else
+        # Silent install didn't apply (no matching update).  Fall back to
+        # the standard GUI installer.  The script blocks here until the
+        # user dismisses the dialog or 3 minutes elapse.
+        warn "Silent CLT install failed — opening GUI installer."
+        warn "After installation finishes, dismiss the dialog."
+        warn "This script will resume automatically."
+        xcode-select --install || true
+    fi
+
+    # Poll for up to 3 minutes for git to appear after the GUI install.
+    for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 \
+             21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36; do
+        sleep 5
+        if command -v git >/dev/null 2>&1; then
+            info "git is now available."
+            return 0
+        fi
+    done
+
+    fail "Command Line Tools did not become available after 3 minutes. " \
+         "Install Xcode Command Line Tools manually and re-run this script."
+}
+
+# ---------------------------- Check: already installed? ----------------------------
+is_installed() {
+    [ -f "$MARKER_FILE" ]
+}
+
 # ---------------------------- Fresh install ----------------------------
-fresh_install(){
+fresh_install() {
     info "Fresh install detected — setting up dotfiles..."
 
     # 1. Homebrew
     if ! has_brew; then
         info "Installing Homebrew..."
         /bin/bash -c "$(curl -fsSL "$BREW_INSTALL_URL")"
+        # shellcheck disable=SC1091
         if [ -x "/opt/homebrew/bin/brew" ]; then
             eval "$(/opt/homebrew/bin/brew shellenv)"
         elif [ -x "/usr/local/bin/brew" ]; then
@@ -69,16 +147,15 @@ fresh_install(){
         info "Oh My Zsh already installed, skipping."
     fi
 
-    # 4. iTerm2 Snazzy theme — force-applied to the Default Profile.
-    # Note: we deliberately do NOT copy this into
-    # ~/Library/Application Support/iTerm2/DynamicProfiles/, because the
-    # colors file embeds a fixed GUID that conflicts with the default
-    # bookmark's GUID and triggers:
-    #   "Dynamic profile with Guid ... conflicts with non-dynamic profile
-    #    with same Guid"
-    # apply-snazzy.sh reads from the dotfiles repo directly.
-    COLORS_SRC="${DOTFILES_DIR}/iterm2/Snazzy.itermcolors"
-    sh "${DOTFILES_DIR}/iterm2/apply-snazzy.sh"
+    # 4. Import the committed iTerm2 preferences snapshot.
+    #    apply-iterm.sh SIGTERMs any running iTerm2, then
+    #    defaults-imports the version-controlled plist.
+    if [ -f "${DOTFILES_DIR}/iterm2/apply-iterm.sh" ]; then
+        info "Applying iTerm2 preferences..."
+        sh "${DOTFILES_DIR}/iterm2/apply-iterm.sh"
+    else
+        warn "apply-iterm.sh not found; skipping iTerm2 configuration."
+    fi
 
     # 5. zplug
     if ! has_zplug; then
@@ -97,44 +174,47 @@ fresh_install(){
     fi
 
     # 7. Apply dotfiles
-    info "Applying dotfiles (source: ${DOTFILES_SUBDIR}/)..."
-    chezmoi apply --source "${DOTFILES_DIR}/${DOTFILES_SUBDIR}"
+    info "Applying dotfiles..."
+    chezmoi apply --source "${DOTFILES_DIR}/${DOTFILES_SOURCE_SUBDIR}"
 
-    # Ensure .zshrc is copied (chezmoi may not overwrite existing files)
-    if [ -f "${DOTFILES_DIR}/${DOTFILES_SUBDIR}/.zshrc" ]; then
+    # Ensure .zshrc is present (chezmoi may not overwrite an existing file).
+    if [ -f "${DOTFILES_DIR}/${DOTFILES_SOURCE_SUBDIR}/.zshrc" ]; then
         info "Copying .zshrc from dotfiles..."
-        cp "${DOTFILES_DIR}/${DOTFILES_SUBDIR}/.zshrc" "$HOME/.zshrc"
+        cp "${DOTFILES_DIR}/${DOTFILES_SOURCE_SUBDIR}/.zshrc" "$HOME/.zshrc"
     fi
 
-    # 8. zplug install (run in zsh, without Oh My Zsh interference)
+    # 8. zplug install — run in a clean zsh session without OME Zsh interference.
     info "Installing zsh plugins..."
-    ZPLUG_HOME=$(brew --prefix)/opt/zplug
+    ZPLUG_HOME="$(brew --prefix)/opt/zplug"
     zsh -c "source $ZPLUG_HOME/init.zsh && zplug install"
 
-    # 9. Set zsh as default shell
+    # 9. Set zsh as the login shell.
     if [ "$SHELL" != "/bin/zsh" ]; then
         info "Setting zsh as default shell..."
-        chsh -s /bin/zsh
+        chsh -s /bin/zsh 2>/dev/null || \
+            warn "Could not set zsh as default shell (may need sudo)."
     else
         info "zsh already default shell, skipping."
     fi
 
-    # Mark as installed
+    # Mark done
     touch "$MARKER_FILE"
-    success "Dotfiles installed successfully."
+    info "Dotfiles installed successfully."
 }
 
 # ---------------------------- Update ----------------------------
-update(){
+update() {
     info "Update detected — pulling latest changes..."
 
+    # If dotfiles isn't a git repo (e.g. cloned as a tarball), re-run fresh install.
     if [ ! -d "${DOTFILES_DIR}/.git" ]; then
-        warn "Chezmoi source is not a git repo. Re-running fresh install."
+        warn "Dotfiles is not a git repo. Re-running fresh install."
         fresh_install
         return
     fi
 
-    current_remote=$(git -C "$DOTFILES_DIR" remote get-url origin 2>/dev/null || echo "")
+    # Ensure the origin remote points to the right URL.
+    current_remote="$(git -C "$DOTFILES_DIR" remote get-url origin 2>/dev/null || echo '')"
     if [ "$current_remote" != "$REPO_URL" ]; then
         git -C "$DOTFILES_DIR" remote add origin "$REPO_URL" 2>/dev/null || \
             git -C "$DOTFILES_DIR" remote set-url origin "$REPO_URL"
@@ -142,6 +222,13 @@ update(){
 
     info "Pulling latest changes..."
     git -C "$DOTFILES_DIR" pull --rebase --autostash
+
+    # Ensure managed tools are present.
+    if ! has_brew; then
+        warn "Homebrew not found; re-running fresh install."
+        fresh_install
+        return
+    fi
 
     if ! has_chezmoi; then
         info "Installing chezmoi..."
@@ -159,41 +246,49 @@ update(){
         return
     fi
 
+    # Re-apply the iTerm2 preferences snapshot.
+    if [ -f "${DOTFILES_DIR}/iterm2/apply-iterm.sh" ]; then
+        info "Re-applying iTerm2 preferences..."
+        sh "${DOTFILES_DIR}/iterm2/apply-iterm.sh" || true
+    fi
+
+    # Re-apply chezmoi-managed dotfiles.
     info "Applying updated dotfiles..."
-    chezmoi apply --source "${DOTFILES_DIR}/${DOTFILES_SUBDIR}"
+    chezmoi apply --source "${DOTFILES_DIR}/${DOTFILES_SOURCE_SUBDIR}"
 
-    # Ensure .zshrc is updated
-    if [ -f "${DOTFILES_DIR}/${DOTFILES_SUBDIR}/.zshrc" ]; then
-        cp "${DOTFILES_DIR}/${DOTFILES_SUBDIR}/.zshrc" "$HOME/.zshrc"
+    # Keep .zshrc in sync.
+    if [ -f "${DOTFILES_DIR}/${DOTFILES_SOURCE_SUBDIR}/.zshrc" ]; then
+        cp "${DOTFILES_DIR}/${DOTFILES_SOURCE_SUBDIR}/.zshrc" "$HOME/.zshrc"
     fi
 
-    # Re-apply Snazzy to the Default Profile
-    if [ -f "${DOTFILES_DIR}/iterm2/Snazzy.itermcolors" ]; then
-        sh "${DOTFILES_DIR}/iterm2/apply-snazzy.sh" || true
-    fi
-
-    info "Re-running zplug install..."
-    ZPLUG_HOME=$(brew --prefix)/opt/zplug
+    # Re-run zplug install to pick up any new plugins.
+    info "Re-installing zsh plugins..."
+    ZPLUG_HOME="$(brew --prefix)/opt/zplug"
     zsh -c "source $ZPLUG_HOME/init.zsh && zplug install"
 
-    success "Dotfiles updated successfully."
+    info "Dotfiles updated successfully."
 }
 
-# ---------------------------- Main ----------------------------
-main(){
+# ---------------------------- Entry point ----------------------------
+main() {
     echo ""
     echo "dotfiles bootstrap"
     echo "=================="
     echo ""
 
+    # Pre-flight: make sure git is available before we try to clone or pull.
+    ensure_build_tools
+
     if [ ! -d "$DOTFILES_DIR/.git" ]; then
         info "Cloning dotfiles into $DOTFILES_DIR..."
         git clone --depth 1 "$REPO_URL" "$DOTFILES_DIR"
-        cd "$DOTFILES_DIR"
     else
-        info "Dotfiles already present at $DOTFILES_DIR, skipping clone."
-        cd "$DOTFILES_DIR"
+        info "Dotfiles already present, skipping clone."
     fi
+
+    # Always cd into the repo so subsequent git/chezmoi commands work
+    # regardless of the current working directory at script invocation.
+    cd "$DOTFILES_DIR"
 
     if is_installed; then
         update
@@ -203,8 +298,8 @@ main(){
 
     echo ""
     echo "Done! Next steps:"
-    echo "  1. Restart iTerm2 (Snazzy is already applied to the Default Profile)"
-    echo "  2. Restart zsh"
+    echo "  1. Restart iTerm2   (Snazzy theme and preferences are applied)"
+    echo "  2. Restart zsh      (plugins and .zshrc are now active)"
     echo ""
 }
 
