@@ -3,8 +3,6 @@
 Personal macOS dotfiles managed with [chezmoi](https://www.chezmoi.io/). One command to
 bootstrap a full developer environment on a fresh macOS install.
 
-**Repo:** `https://github.com/mcapanema/dotfiles.git`
-
 ```shell
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/mcapanema/dotfiles/main/install.sh)"
 ```
@@ -87,46 +85,6 @@ form `"JetBrainsMono-Regular 15"` works. The committed plist uses this form.
 
 ---
 
-## Neovim
-
-Config: `~/.config/nvim/init.vim` (managed via chezmoi at `dotfiles/config/nvim/init.vim`).
-
-| Key | Action |
-|---|---|
-| `\n` | Toggle NERDTree |
-| `:PlugInstall` | Install/update plugins |
-| `:wq` | Save and quit |
-
-Plugins are managed by **vim-plug**, installed by `install.sh` (not in `init.vim`) because
-vim's `system()` doesn't expand `~`. Plugin install: `nvim --headless +PlugInstall +qall`.
-
-**`vim` and `vi`** in `~/.local/bin` both symlink to `nvim`, prepended to `PATH` via `.zshenv`.
-
----
-
-## Shell Configuration
-
-### `.zshenv` (always sourced — environment, not shell behaviour)
-```
-export LANG=en_US.UTF-8
-export EDITOR=nvim
-export VISUAL=nvim
-export GREP_COLOR='1;33'
-[ -d "$HOME/.local/bin" ] && PATH="$HOME/.local/bin:$PATH"
-```
-
-### `.zshrc` (interactive shells only)
-```
-set -o vi                  # Vi keybindings
-bindkey -v                # Vi keymap
-alias rm='nocorrect rm'   # Disable zsh spell-checker on rm
-```
-
-**Note:** zsh uses `#` for comments, not `"`. A `"` after a command starts a string
-literal and causes parse errors like "number expected". Always use `#` in `.zshrc`.
-
----
-
 ## Project Structure
 
 ```
@@ -148,15 +106,6 @@ literal and causes parse errors like "number expected". Always use `#` in `.zshr
     ├── config/settings.json         # API settings
     └── templates/.zshenv           # Claude chezmoi template
 ```
-
----
-
-## Claude Code Integration
-
-The `claude/` directory provides a statusline that parses Claude Code's JSON output and
-renders model, context usage, cost, token rate, rate limits, directory, and git branch.
-
-See [claude/README.md](./claude/README.md) for installation and configuration.
 
 ---
 
