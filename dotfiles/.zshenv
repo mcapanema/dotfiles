@@ -2,6 +2,7 @@ export LANG=en_US.UTF-8
 export EDITOR=nvim
 export VISUAL=nvim
 export Nvim_As_Edit="true"
+export GREP_COLOR='1;33'
 
 # Avoid duplicates in PATH
 typeset -U PATH
