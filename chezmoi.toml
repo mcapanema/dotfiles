@@ -3,7 +3,7 @@
 # Managed files are in the "dotfiles/" subdirectory.
 
 [edit]
-  command = "code"
+  command = ["nvim", "-c", "set nofoldenable"]
 
 [add]
   templateSymlinks = true

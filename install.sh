@@ -47,6 +47,15 @@ has_chezmoi() {
     command -v chezmoi >/dev/null 2>&1
 }
 
+has_nvim() {
+    command -v nvim >/dev/null 2>&1
+}
+
+# vim-plug for Neovim: installed when the autoload file is missing.
+vim_plug_installed() {
+    [ -f "$HOME/.local/share/nvim/site/autoload/plug.vim" ]
+}
+
 # ---------------------------- Pre-flight: build tools ----------------------------
 # On a completely fresh macOS install git is only available after the
 # Command Line Tools package is installed.  CLT ships a git binary at
@@ -165,7 +174,53 @@ fresh_install() {
         info "zplug already installed, skipping."
     fi
 
-    # 6. chezmoi
+    # 6. Neovim
+    if ! has_nvim; then
+        info "Installing Neovim..."
+        brew install neovim
+    else
+        info "Neovim already installed, skipping."
+    fi
+
+    # 6b. Neovim config — copy from the dotfiles repo.  This runs
+    # before chezmoi apply so the repo template is already in place.
+    if [ -f "${DOTFILES_DIR}/${DOTFILES_SOURCE_SUBDIR}/config/nvim/init.vim" ]; then
+        _nvim_dir="$HOME/.config/nvim"
+        mkdir -p "$_nvim_dir"
+        info "Installing Neovim config..."
+        cp "${DOTFILES_DIR}/${DOTFILES_SOURCE_SUBDIR}/config/nvim/init.vim" \
+           "$_nvim_dir/init.vim"
+    fi
+
+    # 6c. Symlink vim/vi → nvim in ~/.local/bin so typing "vim" or "vi"
+    #     at a shell opens Neovim regardless of whether a system vim exists.
+    #     ~/.local/bin is prepended to PATH via .zshenv.
+    if [ -d "$HOME/.local/bin" ] || mkdir -p "$HOME/.local/bin"; then
+        for _bin in vim vi; do
+            ln -sf "$(command -v nvim)" "$HOME/.local/bin/$_bin" && \
+                info "Created ~/.local/bin/$_bin → nvim"
+        done
+    fi
+
+    # 6d. vim-plug for Neovim — download the plugin manager if not present.
+    #     NERDTree (configured in init.vim) is managed by vim-plug.
+    if ! vim_plug_installed; then
+        info "Installing vim-plug for Neovim..."
+        _plug_dir="$(eval echo ~/.local/share/nvim/site/autoload)"
+        mkdir -p "$_plug_dir"
+        curl -sfL 'https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim' \
+            --output "$_plug_dir/plug.vim"
+    fi
+
+    # 6e. Run PlugInstall to fetch NERDTree and any other plugins.
+    #     Runs non-interactively; skips if autoload dir is empty (no plugins declared).
+    if vim_plug_installed && [ -s "$HOME/.config/nvim/init.vim" ]; then
+        info "Installing Neovim plugins (NERDTree, ...)..."
+        nvim --headless +PlugInstall +qall 2>/dev/null || \
+            warn "Some Neovim plugins may not have been installed. Run :PlugInstall manually."
+    fi
+
+    # 7. chezmoi
     if ! has_chezmoi; then
         info "Installing chezmoi..."
         brew install chezmoi
@@ -173,7 +228,7 @@ fresh_install() {
         info "chezmoi already installed, skipping."
     fi
 
-    # 7. Apply dotfiles
+    # 8. Apply dotfiles
     info "Applying dotfiles..."
     chezmoi apply --source "${DOTFILES_DIR}/${DOTFILES_SOURCE_SUBDIR}"
 
@@ -183,12 +238,12 @@ fresh_install() {
         cp "${DOTFILES_DIR}/${DOTFILES_SOURCE_SUBDIR}/.zshrc" "$HOME/.zshrc"
     fi
 
-    # 8. zplug install — run in a clean zsh session without OME Zsh interference.
+    # 9. zplug install — run in a clean zsh session without OME Zsh interference.
     info "Installing zsh plugins..."
     ZPLUG_HOME="$(brew --prefix)/opt/zplug"
     zsh -c "source $ZPLUG_HOME/init.zsh && zplug install"
 
-    # 9. Set zsh as the login shell.
+    # 10. Set zsh as the login shell.
     if [ "$SHELL" != "/bin/zsh" ]; then
         info "Setting zsh as default shell..."
         chsh -s /bin/zsh 2>/dev/null || \
@@ -238,6 +293,39 @@ update() {
     if ! has_zplug; then
         info "Installing zplug..."
         brew install zplug
+    fi
+
+    if ! has_nvim; then
+        info "Installing Neovim..."
+        brew install neovim
+    fi
+
+    # Keep Neovim config in sync with the dotfiles repo.
+    if [ -f "${DOTFILES_DIR}/${DOTFILES_SOURCE_SUBDIR}/config/nvim/init.vim" ]; then
+        mkdir -p "$HOME/.config/nvim"
+        info "Updating Neovim config..."
+        cp "${DOTFILES_DIR}/${DOTFILES_SOURCE_SUBDIR}/config/nvim/init.vim" \
+           "$HOME/.config/nvim/init.vim"
+    fi
+
+    # Keep vim/vi → nvim symlinks in sync.
+    if mkdir -p "$HOME/.local/bin" 2>/dev/null; then
+        for _bin in vim vi; do
+            ln -sf "$(command -v nvim)" "$HOME/.local/bin/$_bin" 2>/dev/null || true
+        done
+    fi
+
+    # Keep vim-plug and plugins in sync.
+    if ! vim_plug_installed; then
+        info "Installing vim-plug for Neovim..."
+        _plug_dir="$(eval echo ~/.local/share/nvim/site/autoload)"
+        mkdir -p "$_plug_dir"
+        curl -sfL 'https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim' \
+            --output "$_plug_dir/plug.vim"
+    fi
+    if vim_plug_installed; then
+        info "Updating Neovim plugins..."
+        nvim --headless +PlugInstall +qall 2>/dev/null || true
     fi
 
     if [ ! -d "$HOME/.oh-my-zsh" ]; then
