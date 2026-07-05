@@ -206,7 +206,7 @@ fresh_install() {
     #     NERDTree (configured in init.vim) is managed by vim-plug.
     if ! vim_plug_installed; then
         info "Installing vim-plug for Neovim..."
-        _plug_dir="$(eval echo ~/.local/share/nvim/site/autoload)"
+        _plug_dir="$HOME/.local/share/nvim/site/autoload"
         mkdir -p "$_plug_dir"
         curl -sfL 'https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim' \
             --output "$_plug_dir/plug.vim"
@@ -318,7 +318,7 @@ update() {
     # Keep vim-plug and plugins in sync.
     if ! vim_plug_installed; then
         info "Installing vim-plug for Neovim..."
-        _plug_dir="$(eval echo ~/.local/share/nvim/site/autoload)"
+        _plug_dir="$HOME/.local/share/nvim/site/autoload"
         mkdir -p "$_plug_dir"
         curl -sfL 'https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim' \
             --output "$_plug_dir/plug.vim"
