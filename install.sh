@@ -6,8 +6,10 @@
 #   2. Installs Homebrew if missing.
 #   3. Clones / updates the dotfiles repo.
 #   4. Installs Homebrew-managed tools (iterm2, chezmoi, zplug …).
-#   5. Runs chezmoi apply to materialise the managed dotfiles.
-#   6. Marks the install complete so later runs go via the update path.
+#   5. Installs Claude Code (CLI/App) and the opencode CLI, including
+#      the Claude Code managed config (settings.json, statusline).
+#   6. Runs chezmoi apply to materialise the managed dotfiles.
+#   7. Marks the install complete so later runs go via the update path.
 #
 # Safe to re-run; the install vs. update path is determined by whether
 # $HOME/.dotfiles-installed exists.
@@ -49,6 +51,16 @@ has_chezmoi() {
 
 has_nvim() {
     command -v nvim >/dev/null 2>&1
+}
+
+# has_claude   — true if Claude Code CLI/App binary is on PATH
+has_claude() {
+    command -v claude >/dev/null 2>&1
+}
+
+# has_opencode — true if the opencode CLI binary is on PATH
+has_opencode() {
+    command -v opencode >/dev/null 2>&1
 }
 
 # vim-plug for Neovim: installed when the autoload file is missing.
@@ -228,6 +240,31 @@ fresh_install() {
         info "chezmoi already installed, skipping."
     fi
 
+    # 7b. Claude Code CLI + App + managed configuration.
+    #     The standalone claude/install.sh handles the brew install and the
+    #     config symlinks (settings.json, statusline script), so we just
+    #     delegate to it. It's idempotent (skips if already installed).
+    if ! has_claude; then
+        info "Installing Claude Code..."
+        brew install claude-code
+    else
+        info "Claude Code already installed, skipping."
+    fi
+    if [ -x "${DOTFILES_DIR}/claude/install.sh" ]; then
+        info "Applying Claude Code configuration..."
+        sh "${DOTFILES_DIR}/claude/install.sh"
+    else
+        warn "claude/install.sh not found; skipping Claude Code configuration."
+    fi
+
+    # 7c. opencode CLI.
+    if ! has_opencode; then
+        info "Installing opencode CLI..."
+        brew install opencode
+    else
+        info "opencode already installed, skipping."
+    fi
+
     # 8. Apply dotfiles
     info "Applying dotfiles..."
     chezmoi apply --source "${DOTFILES_DIR}/${DOTFILES_SOURCE_SUBDIR}"
@@ -298,6 +335,22 @@ update() {
     if ! has_nvim; then
         info "Installing Neovim..."
         brew install neovim
+    fi
+
+    if ! has_claude; then
+        info "Installing Claude Code..."
+        brew install claude-code
+    fi
+
+    if ! has_opencode; then
+        info "Installing opencode CLI..."
+        brew install opencode
+    fi
+
+    # Ensure Claude Code managed configuration is in place.  The
+    # sub-script is idempotent, so re-running is safe.
+    if [ -x "${DOTFILES_DIR}/claude/install.sh" ]; then
+        sh "${DOTFILES_DIR}/claude/install.sh" || true
     fi
 
     # Keep Neovim config in sync with the dotfiles repo.
