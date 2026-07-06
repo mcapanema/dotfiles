@@ -18,6 +18,7 @@ sh -c "$(curl -fsSL https://raw.githubusercontent.com/mcapanema/dotfiles/main/in
 | **Homebrew** | Package manager for macOS |
 | **Oh My Zsh** | Zsh framework with zplug plugin manager |
 | **chezmoi** | Dotfile manager (source in `dotfiles/` subdirectory) |
+| **macOS settings** | Developer-friendly system defaults (keyboard, trackpad, security, Time Machine) |
 
 ---
 
@@ -40,6 +41,7 @@ The script will:
 7. Install NERDTree via vim-plug
 8. Apply all managed dotfiles via chezmoi
 9. Set zsh as the login shell
+10. Apply sensible macOS system defaults (keyboard repeat, trackpad tap-to-click, security, Time Machine)
 
 ### Update
 
@@ -85,6 +87,31 @@ form `"JetBrainsMono-Regular 15"` works. The committed plist uses this form.
 
 ---
 
+## macOS System Settings
+
+The script `macos/apply-settings.sh` applies developer-friendly macOS defaults. Run it any time to ensure a consistent baseline, or re-run after a clean macOS install.
+
+**What it sets:**
+
+| Setting | Domain | Effect |
+|---|---|---|
+| Disable press-and-hold / key repeat | `NSGlobalDomain ApplePressAndHoldEnabled` | Characters repeat immediately on key hold |
+| Fast key repeat rate | `NSGlobalDomain KeyRepeat=1, InitialKeyRepeat=15` | Max repeat speed |
+| Tap to click (built-in trackpad) | `com.apple.AppleMultitouchTrackpad Clicking` | Single-finger tap = click |
+| Tap to click (Bluetooth/external trackpad) | `com.apple.driver.AppleBluetoothMultitouch.trackpad` | Same for external devices |
+| Require password on wake | `com.apple.screensaver askForPassword=1, askForPasswordDelay=0` | Lock immediately |
+| No `.DS_Store` on network volumes | `com.apple.desktopservices DSDontWriteNetworkStores` | Cleaner shares |
+| No Time Machine prompt for new drives | `com.apple.TimeMachine DoNotOfferNewDisksForBackup` | No nagging |
+
+**Note:** `ApplePressAndHoldEnabled` / `KeyRepeat` / `InitialKeyRepeat` are deprecated since macOS 13 but still written for compatibility. On macOS 13+ they may be overridden by the Keyboard system settings panel; they remain harmless.
+
+**To apply manually:**
+```shell
+sh "$HOME/.dotfiles/macos/apply-settings.sh"
+```
+
+---
+
 ## Project Structure
 
 ```
@@ -95,6 +122,8 @@ form `"JetBrainsMono-Regular 15"` works. The committed plist uses this form.
 │   ├── apply-iterm.sh               # Import preferences snapshot
 │   ├── com.googlecode.iterm2.plist.export  # Versioned prefs
 │   └── Snazzy.itermcolors           # Color theme
+├── macos/
+│   └── apply-settings.sh            # Apply developer-friendly macOS defaults
 ├── dotfiles/                        # chezmoi source directory
 │   ├── .zshenv                     # Environment variables
 │   ├── .zshrc                      # Interactive shell config
@@ -113,6 +142,7 @@ form `"JetBrainsMono-Regular 15"` works. The committed plist uses this form.
 
 - **Restart iTerm2** after first install to pick up the Snazzy theme and font
 - **Restart zsh** or run `source ~/.zshrc` after dotfile changes
+- **Log out / log back in** after running `macos/apply-settings.sh` for all changes to take effect
 - Delete `~/.dotfiles-installed` to force a fresh install on next run
 - Working tree must be clean before pushing (`install.sh` does not commit)
 - Commit iTerm2 preference changes after GUI tweaks: `defaults export ...` then `git add`/`commit`
