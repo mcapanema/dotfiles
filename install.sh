@@ -2,21 +2,18 @@
 # Bootstrap script for the mcapanema/dotfiles setup.
 #
 # On a fresh machine it:
-#   1. Applies macOS system preferences (defaults write: keyboard,
-#      trackpad, security, file system, Time Machine).
-#   2. Ensures macOS build tools (CLT/git) are available — required
-#      because Homebrew's installer needs git to bootstrap itself.
-#   3. Installs Homebrew if missing.
-#   4. Installs git (and openssh) via Homebrew so the managed binary is
-#      on PATH and takes precedence over CLT's older git.
-#   5. Clones the dotfiles repo.
-#   6. Installs Homebrew-managed tools (iterm2, chezmoi, zplug …),
-#      opens iTerm2 once so its defaults domain is registered, then
-#      applies the committed iTerm2 preferences snapshot.
-#   7. Installs Claude Code (CLI/App) and the opencode CLI, including
-#      the Claude Code managed config (settings.json, statusline).
-#   8. Runs chezmoi apply to materialise the managed dotfiles.
-#   9. Marks the install complete so later runs go via the update path.
+#   - Applies macOS system preferences (keyboard, trackpad, security,
+#     file system, Time Machine).
+#   - Ensures macOS build tools (CLT/git) are available — required
+#     because Homebrew's installer needs git to bootstrap itself.
+#   - Installs Homebrew and git via Homebrew.
+#   - Clones the dotfiles repo.
+#   - Installs Homebrew-managed tools (iTerm2, chezmoi, zplug …).
+#   - Opens iTerm2 once (to register its defaults domain), then applies
+#     the committed iTerm2 preferences snapshot.
+#   - Installs Claude Code and the opencode CLI, including managed config.
+#   - Runs chezmoi apply to materialise the managed dotfiles.
+#   - Marks the install complete so later runs go via the update path.
 #
 # Safe to re-run; the install vs. update path is determined by whether
 # $HOME/.dotfiles-installed exists.
@@ -36,38 +33,40 @@ info()  { echo "==> $*" ; }
 warn()  { echo " WARNING: $*" ; }
 fail()  { echo "ERROR: $*" >&2; exit 1 ; }
 
+# has — true if a command resolves on PATH
+has() { command -v "$1" >/dev/null 2>&1; }
+
 # has_brew   — true if Homebrew is on PATH
-has_brew() {
-    command -v brew >/dev/null 2>&1
-}
+has_brew() { has brew; }
 
 # has_iterm2 — true if the Homebrew cask is installed
-has_iterm2() {
-    has_brew && brew list --cask iterm2 >/dev/null 2>&1
-}
+has_iterm2() { has_brew && brew list --cask iterm2 >/dev/null 2>&1; }
 
 # has_zplug  — true if the Homebrew formula is installed
-has_zplug() {
-    has_brew && brew list zplug >/dev/null 2>&1
-}
+has_zplug()  { has_brew && brew list zplug >/dev/null 2>&1; }
 
 # has_chezmoi — true if chezmoi binary is on PATH
-has_chezmoi() {
-    command -v chezmoi >/dev/null 2>&1
-}
+has_chezmoi() { has chezmoi; }
 
-has_nvim() {
-    command -v nvim >/dev/null 2>&1
-}
+has_nvim() { has nvim; }
 
 # has_claude   — true if Claude Code CLI/App binary is on PATH
-has_claude() {
-    command -v claude >/dev/null 2>&1
-}
+has_claude() { has claude; }
 
 # has_opencode — true if the opencode CLI binary is on PATH
-has_opencode() {
-    command -v opencode >/dev/null 2>&1
+has_opencode() { has opencode; }
+
+# ensure_brew_on_path — re-sources brew's shellenv so `brew` resolves.
+# Used after a fresh brew install and at the top of every update run.
+ensure_brew_on_path() {
+    if [ -x "/opt/homebrew/bin/brew" ]; then
+        eval "$(/opt/homebrew/bin/brew shellenv)"
+    elif [ -x "/usr/local/bin/brew" ]; then
+        eval "$(/usr/local/bin/brew shellenv)"
+    fi
+    if ! has brew; then
+        fail "Homebrew is installed but 'brew' is not on PATH."
+    fi
 }
 
 # vim-plug for Neovim: installed when the autoload file is missing.
@@ -100,18 +99,16 @@ ensure_build_tools() {
     # We try twice because the package label may or may not carry a
     # version suffix (e.g. "Command Line Tools for Xcode" vs
     # "Command Line Tools for Xcode 26.5").
-    _clt_installed=0
     for _ in 1 2; do
-        if softwareupdate --install --agree-to-license -r \
-            "Command Line Tools for Xcode" >/dev/null 2>&1; then
-            _clt_installed=1
-            break
-        fi
+        softwareupdate --install --agree-to-license -r \
+            "Command Line Tools for Xcode" >/dev/null 2>&1 && break
         sleep 2
     done
 
-    if [ "$_clt_installed" -eq 1 ]; then
-        info "Command Line Tools installed silently."
+    # softwareupdate exits 0 even when there was nothing to install.
+    # Verify git is actually on PATH rather than trusting the exit code.
+    if command -v git >/dev/null 2>&1; then
+        info "CLT / git is now available."
     else
         # Silent install didn't apply (no matching update).  Fall back to
         # the standard GUI installer.  The script blocks here until the
@@ -147,9 +144,10 @@ is_installed() {
 fresh_install() {
     info "Fresh install detected — setting up dotfiles..."
 
-    # 0. Apply macOS system preferences first so keyboard repeat, tap-
-    #    to-click, etc. take effect even if the user logs out partway
-    #    through the install. `defaults write` calls are idempotent.
+    # --- macOS system preferences
+    # Apply first so keyboard repeat, tap-to-click, etc. take effect even
+    # if the user logs out partway through the install.  `defaults write`
+    # calls are idempotent.
     if [ -x "${DOTFILES_DIR}/macos/apply-settings.sh" ]; then
         info "Applying macOS system preferences..."
         DOTFILES="$DOTFILES_DIR" sh "${DOTFILES_DIR}/macos/apply-settings.sh" || \
@@ -158,33 +156,24 @@ fresh_install() {
         warn "macos/apply-settings.sh not found; skipping macOS defaults."
     fi
 
-    # 1. Homebrew
+    # --- Homebrew
     if ! has_brew; then
         info "Installing Homebrew..."
         /bin/bash -c "$(curl -fsSL "$BREW_INSTALL_URL")"
-        # shellcheck disable=SC1091
-        if [ -x "/opt/homebrew/bin/brew" ]; then
-            eval "$(/opt/homebrew/bin/brew shellenv)"
-        elif [ -x "/usr/local/bin/brew" ]; then
-            eval "$(/usr/local/bin/brew shellenv)"
-        fi
+        ensure_brew_on_path
     else
         info "Homebrew already installed, skipping."
+        ensure_brew_on_path
     fi
 
-    # homebrew install succeeded — make sure `brew` is reachable.
-    if ! command -v brew >/dev/null 2>&1; then
-        fail "Homebrew install succeeded but brew is not on PATH."
-    fi
+    # --- git via Homebrew
+    # Install the brew-managed git so it takes precedence over CLT's older
+    # git for all subsequent operations (Oh My Zsh clone, vim-plug plugin
+    # installs, etc.).
+    info "Installing git via Homebrew..."
+    brew install git
 
-    # 1b. Install git + openssh via Homebrew so the brew-managed git is
-    #     on PATH ahead of CLT's older git. Runs first so subsequent
-    #     git operations (Oh My Zsh clone, vim-plug plugin installs,
-    #     etc.) use the modern git.
-    info "Installing git + openssh via Homebrew..."
-    brew install git openssh
-
-    # 2. iTerm2
+    # --- iTerm2
     if ! has_iterm2; then
         info "Installing iTerm2..."
         brew install --cask iterm2
@@ -192,7 +181,7 @@ fresh_install() {
         info "iTerm2 already installed, skipping."
     fi
 
-    # 3. Oh My Zsh
+    # --- Oh My Zsh
     if [ ! -d "$HOME/.oh-my-zsh" ]; then
         info "Installing Oh My Zsh..."
         git clone --depth 1 https://github.com/ohmyzsh/ohmyzsh.git "$HOME/.oh-my-zsh"
@@ -200,19 +189,16 @@ fresh_install() {
         info "Oh My Zsh already installed, skipping."
     fi
 
-    # 4. Import the committed iTerm2 preferences snapshot.
-    #    apply-iterm.sh SIGTERMs any running iTerm2, then
-    #    defaults-imports the version-controlled plist.
-    #    On a fresh install iTerm2's prefs domain isn't registered with
-    #    `defaults(1)` until the .app is launched at least once, so we
-    #    briefly open it first. apply-iterm.sh quits iTerm2 if running,
-    #    so by the time `defaults import` runs the domain is in place.
+    # --- iTerm2 preferences
+    # apply-iterm.sh SIGTERMs any running iTerm2, then defaults-imports
+    # the version-controlled plist.  On a fresh install iTerm2's prefs
+    # domain isn't registered with defaults(1) until the .app has been
+    # launched at least once; we open it briefly here so the import works.
     if [ -f "${DOTFILES_DIR}/iterm2/apply-iterm.sh" ]; then
         if [ -d "/Applications/iTerm.app" ] && \
            ! pgrep -f "iTerm.app/Contents/MacOS/iTerm2" >/dev/null 2>&1; then
             info "Launching iTerm2 once to register its defaults domain..."
             open -a iTerm 2>/dev/null || true
-            # Wait up to ~10s for the main process to come up.
             for _ in 1 2 3 4 5 6 7 8 9 10; do
                 sleep 1
                 pgrep -f "iTerm.app/Contents/MacOS/iTerm2" >/dev/null 2>&1 && break
@@ -225,7 +211,7 @@ fresh_install() {
         warn "apply-iterm.sh not found; skipping iTerm2 configuration."
     fi
 
-    # 5. zplug
+    # --- zplug
     if ! has_zplug; then
         info "Installing zplug..."
         brew install zplug
@@ -233,7 +219,7 @@ fresh_install() {
         info "zplug already installed, skipping."
     fi
 
-    # 6. Neovim
+    # --- Neovim
     if ! has_nvim; then
         info "Installing Neovim..."
         brew install neovim
@@ -241,8 +227,7 @@ fresh_install() {
         info "Neovim already installed, skipping."
     fi
 
-    # 6b. Neovim config — copy from the dotfiles repo.  This runs
-    # before chezmoi apply so the repo template is already in place.
+    # --- Neovim config
     if [ -f "${DOTFILES_DIR}/${DOTFILES_SOURCE_SUBDIR}/config/nvim/init.vim" ]; then
         _nvim_dir="$HOME/.config/nvim"
         mkdir -p "$_nvim_dir"
@@ -251,9 +236,9 @@ fresh_install() {
            "$_nvim_dir/init.vim"
     fi
 
-    # 6c. Symlink vim/vi → nvim in ~/.local/bin so typing "vim" or "vi"
-    #     at a shell opens Neovim regardless of whether a system vim exists.
-    #     ~/.local/bin is prepended to PATH via .zshenv.
+    # --- vim/vi → nvim symlinks
+    # ~/.local/bin is prepended to PATH via .zshenv so these take priority
+    # over any system vim in /usr/bin or /usr/local/bin.
     if [ -d "$HOME/.local/bin" ] || mkdir -p "$HOME/.local/bin"; then
         for _bin in vim vi; do
             ln -sf "$(command -v nvim)" "$HOME/.local/bin/$_bin" && \
@@ -261,8 +246,7 @@ fresh_install() {
         done
     fi
 
-    # 6d. vim-plug for Neovim — download the plugin manager if not present.
-    #     NERDTree (configured in init.vim) is managed by vim-plug.
+    # --- vim-plug
     if ! vim_plug_installed; then
         info "Installing vim-plug for Neovim..."
         _plug_dir="$HOME/.local/share/nvim/site/autoload"
@@ -271,15 +255,14 @@ fresh_install() {
             --output "$_plug_dir/plug.vim"
     fi
 
-    # 6e. Run PlugInstall to fetch NERDTree and any other plugins.
-    #     Runs non-interactively; skips if autoload dir is empty (no plugins declared).
+    # --- Neovim plugins
     if vim_plug_installed && [ -s "$HOME/.config/nvim/init.vim" ]; then
         info "Installing Neovim plugins (NERDTree, ...)..."
         nvim --headless +PlugInstall +qall 2>/dev/null || \
             warn "Some Neovim plugins may not have been installed. Run :PlugInstall manually."
     fi
 
-    # 7. chezmoi
+    # --- chezmoi
     if ! has_chezmoi; then
         info "Installing chezmoi..."
         brew install chezmoi
@@ -287,10 +270,7 @@ fresh_install() {
         info "chezmoi already installed, skipping."
     fi
 
-    # 7b. Claude Code CLI + App + managed configuration.
-    #     The standalone claude/install.sh handles the brew install and the
-    #     config symlinks (settings.json, statusline script), so we just
-    #     delegate to it. It's idempotent (skips if already installed).
+    # --- Claude Code CLI + config
     if ! has_claude; then
         info "Installing Claude Code..."
         brew install claude-code
@@ -304,7 +284,7 @@ fresh_install() {
         warn "claude/install.sh not found; skipping Claude Code configuration."
     fi
 
-    # 7c. opencode CLI.
+    # --- opencode CLI
     if ! has_opencode; then
         info "Installing opencode CLI..."
         brew install opencode
@@ -312,7 +292,7 @@ fresh_install() {
         info "opencode already installed, skipping."
     fi
 
-    # 8. Apply dotfiles
+    # --- chezmoi apply
     info "Applying dotfiles..."
     chezmoi apply --source "${DOTFILES_DIR}/${DOTFILES_SOURCE_SUBDIR}"
 
@@ -322,12 +302,13 @@ fresh_install() {
         cp "${DOTFILES_DIR}/${DOTFILES_SOURCE_SUBDIR}/.zshrc" "$HOME/.zshrc"
     fi
 
-    # 9. zplug install — run in a clean zsh session without OME Zsh interference.
+    # --- zplug install
+    # Run in a clean zsh session without Oh My Zsh interfering.
     info "Installing zsh plugins..."
     ZPLUG_HOME="$(brew --prefix)/opt/zplug"
     zsh -c "source $ZPLUG_HOME/init.zsh && zplug install"
 
-    # 10. Set zsh as the login shell.
+    # --- zsh as login shell
     if [ "$SHELL" != "/bin/zsh" ]; then
         info "Setting zsh as default shell..."
         chsh -s /bin/zsh 2>/dev/null || \
@@ -357,6 +338,11 @@ update() {
     if [ -x "${DOTFILES_DIR}/macos/apply-settings.sh" ]; then
         DOTFILES="$DOTFILES_DIR" sh "${DOTFILES_DIR}/macos/apply-settings.sh" || true
     fi
+
+    # Ensure brew is on PATH — needed because subsequent `brew --prefix` and
+    # `brew install` calls depend on it regardless of how the parent shell
+    # was started.
+    ensure_brew_on_path
 
     # Ensure the origin remote points to the right URL.
     current_remote="$(git -C "$DOTFILES_DIR" remote get-url origin 2>/dev/null || echo '')"

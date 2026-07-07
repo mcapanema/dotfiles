@@ -15,27 +15,26 @@ DOTFILES="${DOTFILES:-$HOME/.dotfiles}"
 PLIST_FILE="$DOTFILES/iterm2/com.googlecode.iterm2.plist.export"
 DOMAIN="com.googlecode.iterm2"
 
+info()  { echo "==> $*" ; }
+
 if [ ! -f "$PLIST_FILE" ]; then
     echo "ERROR: iTerm2 pref snapshot not found at $PLIST_FILE" >&2
     exit 1
 fi
 
-# `defaults import` requires the snapshot to be in binary plist form;
-# the dotfiles copy is already in that form (kept as a `.export`
-# suffix to make that obvious in future diffs).
-if plutil -lint "$PLIST_FILE" >/dev/null 2>&1; then
-    :
-else
+# Validate the plist before attempting import. `plutil -lint` exits 0
+# only when the file is a valid property list in any supported format.
+plutil -lint "$PLIST_FILE" >/dev/null 2>&1 || {
     echo "ERROR: $PLIST_FILE is not a valid plist; refusing to import." >&2
     exit 1
-fi
+}
 
 # Make sure iTerm2 isn't running so it doesn't overwrite the file we
 # just imported on shutdown. SIGTERM is what we found to actually
 # take iTerm2 down; osascript's `quit` waits indefinitely when the
 # app prompts to confirm session close.
 if pgrep -f "iTerm.app/Contents/MacOS/iTerm2" >/dev/null 2>&1; then
-    echo "==> Stopping iTerm2 before defaults import..."
+    info "Stopping iTerm2 before defaults import..."
     if ! pkill -f "iTerm.app/Contents/MacOS/iTerm2"; then
         echo "ERROR: could not stop iTerm2; aborting import to avoid racing the prefs daemon." >&2
         exit 1
@@ -52,5 +51,6 @@ if pgrep -f "iTerm.app/Contents/MacOS/iTerm2" >/dev/null 2>&1; then
     fi
 fi
 
+info "Importing iTerm2 preferences from $PLIST_FILE..."
 defaults import "$DOMAIN" "$PLIST_FILE"
-echo "==> iTerm2 prefs imported from $PLIST_FILE"
+info "iTerm2 preferences applied."
