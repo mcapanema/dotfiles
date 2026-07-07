@@ -2,14 +2,21 @@
 # Bootstrap script for the mcapanema/dotfiles setup.
 #
 # On a fresh machine it:
-#   1. Ensures macOS build tools (git) are available via CLT.
-#   2. Installs Homebrew if missing.
-#   3. Clones / updates the dotfiles repo.
-#   4. Installs Homebrew-managed tools (iterm2, chezmoi, zplug …).
-#   5. Installs Claude Code (CLI/App) and the opencode CLI, including
+#   1. Applies macOS system preferences (defaults write: keyboard,
+#      trackpad, security, file system, Time Machine).
+#   2. Ensures macOS build tools (CLT/git) are available — required
+#      because Homebrew's installer needs git to bootstrap itself.
+#   3. Installs Homebrew if missing.
+#   4. Installs git (and openssh) via Homebrew so the managed binary is
+#      on PATH and takes precedence over CLT's older git.
+#   5. Clones the dotfiles repo.
+#   6. Installs Homebrew-managed tools (iterm2, chezmoi, zplug …),
+#      opens iTerm2 once so its defaults domain is registered, then
+#      applies the committed iTerm2 preferences snapshot.
+#   7. Installs Claude Code (CLI/App) and the opencode CLI, including
 #      the Claude Code managed config (settings.json, statusline).
-#   6. Runs chezmoi apply to materialise the managed dotfiles.
-#   7. Marks the install complete so later runs go via the update path.
+#   8. Runs chezmoi apply to materialise the managed dotfiles.
+#   9. Marks the install complete so later runs go via the update path.
 #
 # Safe to re-run; the install vs. update path is determined by whether
 # $HOME/.dotfiles-installed exists.
@@ -112,6 +119,8 @@ ensure_build_tools() {
         warn "Silent CLT install failed — opening GUI installer."
         warn "After installation finishes, dismiss the dialog."
         warn "This script will resume automatically."
+        warn "If the dialog stays open longer than 3 minutes, Ctrl-C and"
+        warn "re-run this script after CLT is installed."
         xcode-select --install || true
     fi
 
@@ -138,6 +147,17 @@ is_installed() {
 fresh_install() {
     info "Fresh install detected — setting up dotfiles..."
 
+    # 0. Apply macOS system preferences first so keyboard repeat, tap-
+    #    to-click, etc. take effect even if the user logs out partway
+    #    through the install. `defaults write` calls are idempotent.
+    if [ -x "${DOTFILES_DIR}/macos/apply-settings.sh" ]; then
+        info "Applying macOS system preferences..."
+        DOTFILES="$DOTFILES_DIR" sh "${DOTFILES_DIR}/macos/apply-settings.sh" || \
+            warn "macOS system preferences partially failed; you can rerun apply-settings.sh manually."
+    else
+        warn "macos/apply-settings.sh not found; skipping macOS defaults."
+    fi
+
     # 1. Homebrew
     if ! has_brew; then
         info "Installing Homebrew..."
@@ -151,6 +171,18 @@ fresh_install() {
     else
         info "Homebrew already installed, skipping."
     fi
+
+    # homebrew install succeeded — make sure `brew` is reachable.
+    if ! command -v brew >/dev/null 2>&1; then
+        fail "Homebrew install succeeded but brew is not on PATH."
+    fi
+
+    # 1b. Install git + openssh via Homebrew so the brew-managed git is
+    #     on PATH ahead of CLT's older git. Runs first so subsequent
+    #     git operations (Oh My Zsh clone, vim-plug plugin installs,
+    #     etc.) use the modern git.
+    info "Installing git + openssh via Homebrew..."
+    brew install git openssh
 
     # 2. iTerm2
     if ! has_iterm2; then
@@ -171,9 +203,24 @@ fresh_install() {
     # 4. Import the committed iTerm2 preferences snapshot.
     #    apply-iterm.sh SIGTERMs any running iTerm2, then
     #    defaults-imports the version-controlled plist.
+    #    On a fresh install iTerm2's prefs domain isn't registered with
+    #    `defaults(1)` until the .app is launched at least once, so we
+    #    briefly open it first. apply-iterm.sh quits iTerm2 if running,
+    #    so by the time `defaults import` runs the domain is in place.
     if [ -f "${DOTFILES_DIR}/iterm2/apply-iterm.sh" ]; then
+        if [ -d "/Applications/iTerm.app" ] && \
+           ! pgrep -f "iTerm.app/Contents/MacOS/iTerm2" >/dev/null 2>&1; then
+            info "Launching iTerm2 once to register its defaults domain..."
+            open -a iTerm 2>/dev/null || true
+            # Wait up to ~10s for the main process to come up.
+            for _ in 1 2 3 4 5 6 7 8 9 10; do
+                sleep 1
+                pgrep -f "iTerm.app/Contents/MacOS/iTerm2" >/dev/null 2>&1 && break
+            done
+        fi
         info "Applying iTerm2 preferences..."
-        sh "${DOTFILES_DIR}/iterm2/apply-iterm.sh"
+        DOTFILES="$DOTFILES_DIR" sh "${DOTFILES_DIR}/iterm2/apply-iterm.sh" || \
+            warn "apply-iterm.sh failed; you can rerun it manually after opening iTerm2 once."
     else
         warn "apply-iterm.sh not found; skipping iTerm2 configuration."
     fi
@@ -305,6 +352,12 @@ update() {
         return
     fi
 
+    # Re-apply macOS system preferences (idempotent; keeps prefs in sync
+    # when apply-settings.sh is updated).
+    if [ -x "${DOTFILES_DIR}/macos/apply-settings.sh" ]; then
+        DOTFILES="$DOTFILES_DIR" sh "${DOTFILES_DIR}/macos/apply-settings.sh" || true
+    fi
+
     # Ensure the origin remote points to the right URL.
     current_remote="$(git -C "$DOTFILES_DIR" remote get-url origin 2>/dev/null || echo '')"
     if [ "$current_remote" != "$REPO_URL" ]; then
@@ -390,7 +443,7 @@ update() {
     # Re-apply the iTerm2 preferences snapshot.
     if [ -f "${DOTFILES_DIR}/iterm2/apply-iterm.sh" ]; then
         info "Re-applying iTerm2 preferences..."
-        sh "${DOTFILES_DIR}/iterm2/apply-iterm.sh" || true
+        DOTFILES="$DOTFILES_DIR" sh "${DOTFILES_DIR}/iterm2/apply-iterm.sh" || true
     fi
 
     # Re-apply chezmoi-managed dotfiles.
