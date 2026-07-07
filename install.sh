@@ -166,6 +166,18 @@ fresh_install() {
         ensure_brew_on_path
     fi
 
+    # --- Fonts
+    # JetBrains Mono is referenced by the iTerm2 preferences snapshot
+    # (JetBrainsMono-Regular) and by Neovim's init.vim.  Install it via
+    # Homebrew so the font is available for iTerm2 to use immediately
+    # after the preferences are applied.
+    if ! brew list --cask font-jetbrains-mono >/dev/null 2>&1; then
+        info "Installing JetBrains Mono font..."
+        brew install --cask font-jetbrains-mono
+    else
+        info "JetBrains Mono already installed, skipping."
+    fi
+
     # --- git via Homebrew
     # Install the brew-managed git so it takes precedence over CLT's older
     # git for all subsequent operations (Oh My Zsh clone, vim-plug plugin
@@ -359,6 +371,12 @@ update() {
         warn "Homebrew not found; re-running fresh install."
         fresh_install
         return
+    fi
+
+    # Keep JetBrains Mono font in sync in case it was updated.
+    if ! brew list --cask font-jetbrains-mono >/dev/null 2>&1; then
+        info "Installing JetBrains Mono font..."
+        brew install --cask font-jetbrains-mono
     fi
 
     if ! has_chezmoi; then
