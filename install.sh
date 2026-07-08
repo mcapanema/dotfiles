@@ -18,8 +18,7 @@
 # Safe to re-run; the install vs. update path is determined by whether
 # $HOME/.dotfiles-installed exists.
 
-set -eu
-set -o pipefail
+set -euo pipefail
 
 # ---------------------------- Constants ----------------------------
 REPO_URL="https://github.com/mcapanema/dotfiles.git"
@@ -39,11 +38,15 @@ has() { command -v "$1" >/dev/null 2>&1; }
 # has_brew   — true if Homebrew is on PATH
 has_brew() { has brew; }
 
+# brew_pkg_installed — true if a Homebrew formula or cask is installed.
+# Used by has_iterm2/has_zplug and inline checks (e.g. JetBrains Mono).
+brew_pkg_installed() { has_brew && brew list "$1" >/dev/null 2>&1; }
+
 # has_iterm2 — true if the Homebrew cask is installed
-has_iterm2() { has_brew && brew list --cask iterm2 >/dev/null 2>&1; }
+has_iterm2() { brew_pkg_installed iterm2; }
 
 # has_zplug  — true if the Homebrew formula is installed
-has_zplug()  { has_brew && brew list zplug >/dev/null 2>&1; }
+has_zplug()  { brew_pkg_installed zplug; }
 
 # has_chezmoi — true if chezmoi binary is on PATH
 has_chezmoi() { has chezmoi; }
@@ -206,7 +209,7 @@ fresh_install() {
     # (JetBrainsMono-Regular) and by Neovim's init.vim.  Install it via
     # Homebrew so the font is available for iTerm2 to use immediately
     # after the preferences are applied.
-    if ! brew list --cask font-jetbrains-mono >/dev/null 2>&1; then
+    if ! brew_pkg_installed font-jetbrains-mono; then
         info "Installing JetBrains Mono font..."
         brew install --cask font-jetbrains-mono
     else
@@ -412,7 +415,7 @@ update() {
     fi
 
     # Keep JetBrains Mono font in sync in case it was updated.
-    if ! brew list --cask font-jetbrains-mono >/dev/null 2>&1; then
+    if ! brew_pkg_installed font-jetbrains-mono; then
         info "Installing JetBrains Mono font..."
         brew install --cask font-jetbrains-mono
     fi
