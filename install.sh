@@ -351,9 +351,12 @@ fresh_install() {
 
     # --- zplug install
     # Run in a clean zsh session without Oh My Zsh interfering.
+    # Tolerant of non-zero exit (e.g. zplug re-clobbers comp files) so the
+    # bootstrap path is not blocked by an optional cosmetic step.
     info "Installing zsh plugins..."
     ZPLUG_HOME="$(brew --prefix)/opt/zplug"
-    zsh -c "source $ZPLUG_HOME/init.zsh && zplug install"
+    zsh -c "source $ZPLUG_HOME/init.zsh && zplug install" \
+        || warn "zplug install returned non-zero; you can run it manually later."
 
     # --- zsh as login shell
     if [ "$SHELL" != "/bin/zsh" ]; then
@@ -497,7 +500,8 @@ update() {
     # Re-run zplug install to pick up any new plugins.
     info "Re-installing zsh plugins..."
     ZPLUG_HOME="$(brew --prefix)/opt/zplug"
-    zsh -c "source $ZPLUG_HOME/init.zsh && zplug install"
+    zsh -c "source $ZPLUG_HOME/init.zsh && zplug install" \
+        || warn "zplug install returned non-zero; you can run it manually later."
 
     info "Dotfiles updated successfully."
 }

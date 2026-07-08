@@ -20,8 +20,9 @@ zplug "zsh-users/zsh-autosuggestions", as:plugin, defer:2
 
 zplug load
 
-# Auto-install plugins if missing
-if ! zplug check --verbose; then
+# Auto-install plugins if missing (interactive shells only — keeps
+# non-interactive runs like install.sh non-blocking).
+if [ -t 0 ] && ! zplug check --verbose; then
     printf "Install plugins? [y/N]: "
     if read -q; then
         echo; zplug install
