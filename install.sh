@@ -28,25 +28,21 @@ DOTFILES_DIR="$HOME/.dotfiles"
 DOTFILES_SOURCE_SUBDIR="dotfiles"
 
 # ---------------------------- Helpers ----------------------------
+# Two primitives: command presence (cmd_available) and brew-pkg presence
+# (brew_installed). All higher-level predicates derive from these.
+
+# Variable names prefixed with `_` are function-local throwaways; the
+# convention is enforced by convention only since POSIX sh lacks `local`.
+
 info()  { echo "==> $*" ; }
 warn()  { echo " WARNING: $*" ; }
 fail()  { echo "ERROR: $*" >&2; exit 1 ; }
 
-# has — true if a command resolves on PATH
-has() { command -v "$1" >/dev/null 2>&1; }
+# cmd_available — true if a command resolves on PATH.
+cmd_available() { command -v "$1" >/dev/null 2>&1; }
 
-# has_brew   — true if Homebrew is on PATH
-has_brew() { has brew; }
-
-# brew_pkg_installed — true if a Homebrew formula or cask is installed.
-# Used by has_iterm2/has_zplug and inline checks (e.g. JetBrains Mono).
-brew_pkg_installed() { has_brew && brew list "$1" >/dev/null 2>&1; }
-
-# has_iterm2 — true if the Homebrew cask is installed
-has_iterm2() { brew_pkg_installed iterm2; }
-
-# has_zplug  — true if the Homebrew formula is installed
-has_zplug()  { brew_pkg_installed zplug; }
+# brew_installed — true if a Homebrew formula or cask is installed.
+brew_installed() { cmd_available brew && brew list "$1" >/dev/null 2>&1; }
 
 # brew_install_if_missing — install a Homebrew formula/cask if not present.
 #   $1: human-readable name for log lines (e.g. "iTerm2", "zplug")
@@ -54,24 +50,13 @@ has_zplug()  { brew_pkg_installed zplug; }
 #   $3+: optional brew install flags (e.g. --cask)
 brew_install_if_missing() {
     _kind="$1"; _pkg="$2"; shift 2
-    if brew_pkg_installed "$_pkg"; then
+    if brew_installed "$_pkg"; then
         info "$_kind already installed, skipping."
     else
         info "Installing $_kind..."
         brew install "$@" "$_pkg"
     fi
 }
-
-# has_chezmoi — true if chezmoi binary is on PATH
-has_chezmoi() { has chezmoi; }
-
-has_nvim() { has nvim; }
-
-# has_claude   — true if Claude Code CLI/App binary is on PATH
-has_claude() { has claude; }
-
-# has_opencode — true if the opencode CLI binary is on PATH
-has_opencode() { has opencode; }
 
 # ensure_brew_on_path — re-sources brew's shellenv so `brew` resolves.
 # Used after a fresh brew install and at the top of every update run.
@@ -81,7 +66,7 @@ ensure_brew_on_path() {
     elif [ -x "/usr/local/bin/brew" ]; then
         eval "$(/usr/local/bin/brew shellenv)"
     fi
-    if ! has brew; then
+    if ! cmd_available brew; then
         fail "Homebrew is installed but 'brew' is not on PATH."
     fi
 }
@@ -95,7 +80,7 @@ vim_plug_installed() {
 # Idempotent. Used both as a hard dependency of this repo (called before clone)
 # and inside fresh_install.
 install_homebrew() {
-    if has_brew; then
+    if cmd_available brew; then
         ensure_brew_on_path
         return 0
     fi
@@ -449,7 +434,7 @@ update() {
     git -C "$DOTFILES_DIR" pull --rebase --autostash
 
     # Ensure managed tools are present.
-    if ! has_brew; then
+    if ! cmd_available brew; then
         warn "Homebrew not found; re-running fresh install."
         fresh_install
         return
