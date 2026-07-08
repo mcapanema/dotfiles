@@ -74,6 +74,48 @@ vim_plug_installed() {
     [ -f "$HOME/.local/share/nvim/site/autoload/plug.vim" ]
 }
 
+# install_homebrew — installs Homebrew if missing, then ensures it is on PATH.
+# Idempotent. Used both as a hard dependency of this repo (called before clone)
+# and inside fresh_install.
+install_homebrew() {
+    if has_brew; then
+        ensure_brew_on_path
+        return 0
+    fi
+    info "Installing Homebrew..."
+    /bin/bash -c "$(curl -fsSL "$BREW_INSTALL_URL")"
+    ensure_brew_on_path
+}
+
+# ensure_brew_git — guarantees a Homebrew-managed git binary is present and
+# resolvable. Treats brew as a hard dependency of this repo so a freshly
+# cloned machine does not depend on Apple's older CLT git.
+ensure_brew_git() {
+    install_homebrew
+    _brew_prefix="$(brew --prefix)"
+    if [ -x "$_brew_prefix/bin/git" ] && \
+       "$_brew_prefix/bin/git" --version >/dev/null 2>&1; then
+        info "brew git already available at $_brew_prefix/bin/git"
+        return 0
+    fi
+    info "Installing git via Homebrew..."
+    brew install git
+}
+
+# ensure_git — installs brew + brew-managed git as dependencies before any
+# `git clone` of this repo. If brew is somehow unreachable, falls back to
+# the CLT-based path via ensure_build_tools.
+ensure_git() {
+    ensure_brew_git
+    # Final sanity: `git` must actually resolve on PATH at this point.
+    if ! command -v git >/dev/null 2>&1; then
+        warn "brew-supplied git not on PATH — falling back to CLT."
+        ensure_build_tools
+    fi
+    command -v git >/dev/null 2>&1 || \
+        fail "git is not available; install Xcode CLT or Homebrew manually."
+}
+
 # ---------------------------- Pre-flight: build tools ----------------------------
 # On a completely fresh macOS install git is only available after the
 # Command Line Tools package is installed.  CLT ships a git binary at
@@ -157,14 +199,7 @@ fresh_install() {
     fi
 
     # --- Homebrew
-    if ! has_brew; then
-        info "Installing Homebrew..."
-        /bin/bash -c "$(curl -fsSL "$BREW_INSTALL_URL")"
-        ensure_brew_on_path
-    else
-        info "Homebrew already installed, skipping."
-        ensure_brew_on_path
-    fi
+    install_homebrew
 
     # --- Fonts
     # JetBrains Mono is referenced by the iTerm2 preferences snapshot
@@ -474,14 +509,18 @@ main() {
     echo "=================="
     echo ""
 
-    # Pre-flight: make sure git is available before we try to clone or pull.
-    ensure_build_tools
-
+    # Pre-flight: brew and brew-managed git are hard dependencies of this
+    # repo. When the repo is absent we must install them before cloning.
+    # When the repo is already present we only need a working `git` for
+    # `git pull`, so the cheap CLT-aware path is sufficient.
     if [ ! -d "$DOTFILES_DIR/.git" ]; then
+        info "Repository not yet cloned — installing brew and brew-managed git as dependencies..."
+        ensure_git
         info "Cloning dotfiles into $DOTFILES_DIR..."
         git clone --depth 1 "$REPO_URL" "$DOTFILES_DIR"
     else
         info "Dotfiles already present, skipping clone."
+        ensure_build_tools
     fi
 
     # Always cd into the repo so subsequent git/chezmoi commands work
