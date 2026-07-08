@@ -194,6 +194,157 @@ ensure_build_tools() {
          "Install Xcode Command Line Tools manually and re-run this script."
 }
 
+# ---------------------------- Shared step helpers ----------------------------
+# These helpers back both fresh_install and update so neither path can
+# silently drift from the other.  Each helper encapsulates a single
+# install-time concern.
+
+# apply_macos_prefs — runs macos/apply-settings.sh idempotently.  Fresh
+# install is permitted to surface a soft warning if partial failure
+# occurs; update treats any failure as cosmetic.
+apply_macos_prefs() {
+    _tolerance="${1:-warn}"
+    if [ -x "${DOTFILES_DIR}/macos/apply-settings.sh" ]; then
+        if [ "$_tolerance" = "warn" ]; then
+            info "Applying macOS system preferences..."
+        fi
+        DOTFILES="$DOTFILES_DIR" sh "${DOTFILES_DIR}/macos/apply-settings.sh" \
+            || [ "$_tolerance" = "true" ] \
+            || warn "macOS system preferences partially failed; you can rerun apply-settings.sh manually."
+    fi
+}
+
+# launch_iterm_once — opens iTerm2 the first time so its defaults domain
+# is registered with defaults(1) before the snapshot is imported.  No-op
+# if iTerm2 is already running or not installed yet.
+launch_iterm_once() {
+    if [ ! -d "/Applications/iTerm.app" ]; then
+        return 0
+    fi
+    if pgrep -f "iTerm.app/Contents/MacOS/iTerm2" >/dev/null 2>&1; then
+        return 0
+    fi
+    info "Launching iTerm2 once to register its defaults domain..."
+    open -a iTerm 2>/dev/null || true
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+        sleep 1
+        pgrep -f "iTerm.app/Contents/MacOS/iTerm2" >/dev/null 2>&1 && return 0
+    done
+}
+
+apply_iterm_prefs() {
+    _tolerance="${1:-warn}"
+    if [ ! -f "${DOTFILES_DIR}/iterm2/apply-iterm.sh" ]; then
+        [ "$_tolerance" = "warn" ] && warn "apply-iterm.sh not found; skipping iTerm2 configuration."
+        return 0
+    fi
+    DOTFILES="$DOTFILES_DIR" sh "${DOTFILES_DIR}/iterm2/apply-iterm.sh" \
+        || [ "$_tolerance" = "true" ] \
+        || warn "apply-iterm.sh failed; you can rerun it manually after opening iTerm2 once."
+}
+
+# install_omz — clones Oh My Zsh to ~/.oh-my-zsh if absent.  The repo
+# is ~140 MB shallow-cloned so the install-time cost is modest.
+install_omz() {
+    if [ -d "$HOME/.oh-my-zsh" ]; then
+        info "Oh My Zsh already installed, skipping."
+    else
+        info "Installing Oh My Zsh..."
+        git clone --depth 1 https://github.com/ohmyzsh/ohmyzsh.git "$HOME/.oh-my-zsh"
+    fi
+}
+
+# sync_neovim_config — copies the managed init.vim into ~/.config/nvim.
+sync_neovim_config() {
+    if [ ! -f "${DOTFILES_DIR}/${DOTFILES_SOURCE_SUBDIR}/config/nvim/init.vim" ]; then
+        return 0
+    fi
+    mkdir -p "$HOME/.config/nvim"
+    info "Syncing Neovim config..."
+    cp "${DOTFILES_DIR}/${DOTFILES_SOURCE_SUBDIR}/config/nvim/init.vim" \
+       "$HOME/.config/nvim/init.vim"
+}
+
+# sync_nvim_symlinks — links ~/.local/bin/{vim,vi} to whatever `nvim`
+# resolves to.  ~/.local/bin is prepended to PATH via .zshenv so these
+# take priority over any system vim in /usr/bin or /usr/local/bin.
+#   $1: tolerance — "warn" surfaces per-link success, "true" silences
+#       everything; defaults to "warn".
+sync_nvim_symlinks() {
+    _tolerance="${1:-warn}"
+    _target="$(command -v nvim 2>/dev/null)" || return 0
+    mkdir -p "$HOME/.local/bin"
+    for _bin in vim vi; do
+        if [ "$_tolerance" = "warn" ]; then
+            ln -sf "$_target" "$HOME/.local/bin/$_bin" \
+                && info "Created ~/.local/bin/$_bin → nvim"
+        else
+            ln -sf "$_target" "$HOME/.local/bin/$_bin" 2>/dev/null || true
+        fi
+    done
+}
+
+# ensure_vim_plug — installs vim-plug's autoload script if absent.
+ensure_vim_plug() {
+    if vim_plug_installed; then
+        return 0
+    fi
+    info "Installing vim-plug for Neovim..."
+    _plug_dir="$HOME/.local/share/nvim/site/autoload"
+    mkdir -p "$_plug_dir"
+    curl -sfL 'https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim' \
+        --output "$_plug_dir/plug.vim"
+}
+
+# install_nvim_plugins — runs :PlugInstall non-interactively.  Tolerates
+# plugin-install errors (see original comments at fresh_install:308 and
+# update:474 for context).
+install_nvim_plugins() {
+    if ! vim_plug_installed || [ ! -s "$HOME/.config/nvim/init.vim" ]; then
+        return 0
+    fi
+    info "Syncing Neovim plugins..."
+    nvim --headless +PlugInstall +qall 2>/dev/null || \
+        [ "${1:-warn}" = "true" ] || \
+        warn "Some Neovim plugins may not have been installed. Run :PlugInstall manually."
+}
+
+# install_claude_config — applies claude/install.sh if shipped.
+#   $1: tolerance — "true" swallows errors, "warn" surfaces them.
+install_claude_config() {
+    _tolerance="${1:-warn}"
+    if [ ! -x "${DOTFILES_DIR}/claude/install.sh" ]; then
+        [ "$_tolerance" = "warn" ] \
+            && warn "claude/install.sh not found; skipping Claude Code configuration."
+        return 0
+    fi
+    if [ "$_tolerance" = "warn" ]; then
+        info "Applying Claude Code configuration..."
+        sh "${DOTFILES_DIR}/claude/install.sh"
+    else
+        sh "${DOTFILES_DIR}/claude/install.sh" || true
+    fi
+}
+
+# copy_dotfile — copies a managed file from the repo to $HOME if it
+# exists.  Used for .zshrc which chezmoi may not overwrite.
+copy_dotfile() {
+    _src="$1"
+    _dst="$2"
+    [ "$3" = "verbose" ] && info "Copying $(basename "$_src") from dotfiles..."
+    cp "$_src" "$_dst"
+}
+
+# run_zplug_install — runs zplug install in a clean zsh session so Oh
+# My Zsh init doesn't interfere.  Tolerant of non-zero exit (zplug
+# occasionally re-clobbers completion files).
+run_zplug_install() {
+    info "Syncing zsh plugins..."
+    ZPLUG_HOME="$(brew --prefix)/opt/zplug"
+    zsh -c "source $ZPLUG_HOME/init.zsh && zplug install" \
+        || warn "zplug install returned non-zero; you can run it manually later."
+}
+
 # ---------------------------- Check: already installed? ----------------------------
 is_installed() {
     [ -f "$MARKER_FILE" ]
@@ -203,142 +354,57 @@ is_installed() {
 fresh_install() {
     info "Fresh install detected — setting up dotfiles..."
 
-    # --- macOS system preferences
-    # Apply first so keyboard repeat, tap-to-click, etc. take effect even
-    # if the user logs out partway through the install.  `defaults write`
-    # calls are idempotent.
-    if [ -x "${DOTFILES_DIR}/macos/apply-settings.sh" ]; then
-        info "Applying macOS system preferences..."
-        DOTFILES="$DOTFILES_DIR" sh "${DOTFILES_DIR}/macos/apply-settings.sh" || \
-            warn "macOS system preferences partially failed; you can rerun apply-settings.sh manually."
-    else
-        warn "macos/apply-settings.sh not found; skipping macOS defaults."
-    fi
+    apply_macos_prefs warn
 
-    # --- Homebrew
     install_homebrew
 
-    # --- Fonts
-    # JetBrains Mono is referenced by the iTerm2 preferences snapshot
-    # (JetBrainsMono-Regular) and by Neovim's init.vim.  Install it via
-    # Homebrew so the font is available for iTerm2 to use immediately
-    # after the preferences are applied.
     brew_install_if_missing "JetBrains Mono" font-jetbrains-mono --cask
 
-    # --- git via Homebrew
-    # Install the brew-managed git so it takes precedence over CLT's older
-    # git for all subsequent operations (Oh My Zsh clone, vim-plug plugin
-    # installs, etc.).
+    # Install the brew-managed git (always; ensure_brew_git's earlier
+    # early-return already verified it as a hard dependency, so this is
+    # a no-op upgrade when present and a fresh install when not).
     info "Installing git via Homebrew..."
     brew install git
 
-    # --- iTerm2
     brew_install_if_missing "iTerm2" iterm2 --cask
 
-    # --- Oh My Zsh
-    if [ ! -d "$HOME/.oh-my-zsh" ]; then
-        info "Installing Oh My Zsh..."
-        git clone --depth 1 https://github.com/ohmyzsh/ohmyzsh.git "$HOME/.oh-my-zsh"
-    else
-        info "Oh My Zsh already installed, skipping."
-    fi
+    install_omz
 
-    # --- iTerm2 preferences
-    # apply-iterm.sh SIGTERMs any running iTerm2, then defaults-imports
-    # the version-controlled plist.  On a fresh install iTerm2's prefs
-    # domain isn't registered with defaults(1) until the .app has been
-    # launched at least once; we open it briefly here so the import works.
-    if [ -f "${DOTFILES_DIR}/iterm2/apply-iterm.sh" ]; then
-        if [ -d "/Applications/iTerm.app" ] && \
-           ! pgrep -f "iTerm.app/Contents/MacOS/iTerm2" >/dev/null 2>&1; then
-            info "Launching iTerm2 once to register its defaults domain..."
-            open -a iTerm 2>/dev/null || true
-            for _ in 1 2 3 4 5 6 7 8 9 10; do
-                sleep 1
-                pgrep -f "iTerm.app/Contents/MacOS/iTerm2" >/dev/null 2>&1 && break
-            done
-        fi
-        info "Applying iTerm2 preferences..."
-        DOTFILES="$DOTFILES_DIR" sh "${DOTFILES_DIR}/iterm2/apply-iterm.sh" || \
-            warn "apply-iterm.sh failed; you can rerun it manually after opening iTerm2 once."
-    else
-        warn "apply-iterm.sh not found; skipping iTerm2 configuration."
-    fi
+    # Launch iTerm2 once on first run so its defaults domain is
+    # registered with defaults(1) before we import the snapshot.
+    launch_iterm_once
+    info "Applying iTerm2 preferences..."
+    apply_iterm_prefs warn
 
-    # --- zplug
     brew_install_if_missing "zplug" zplug
 
-    # --- Neovim
     brew_install_if_missing "Neovim" neovim
 
-    # --- Neovim config
-    if [ -f "${DOTFILES_DIR}/${DOTFILES_SOURCE_SUBDIR}/config/nvim/init.vim" ]; then
-        _nvim_dir="$HOME/.config/nvim"
-        mkdir -p "$_nvim_dir"
-        info "Installing Neovim config..."
-        cp "${DOTFILES_DIR}/${DOTFILES_SOURCE_SUBDIR}/config/nvim/init.vim" \
-           "$_nvim_dir/init.vim"
-    fi
+    sync_neovim_config
 
-    # --- vim/vi → nvim symlinks
-    # ~/.local/bin is prepended to PATH via .zshenv so these take priority
-    # over any system vim in /usr/bin or /usr/local/bin.
-    if [ -d "$HOME/.local/bin" ] || mkdir -p "$HOME/.local/bin"; then
-        for _bin in vim vi; do
-            ln -sf "$(command -v nvim)" "$HOME/.local/bin/$_bin" && \
-                info "Created ~/.local/bin/$_bin → nvim"
-        done
-    fi
+    sync_nvim_symlinks warn
 
-    # --- vim-plug
-    if ! vim_plug_installed; then
-        info "Installing vim-plug for Neovim..."
-        _plug_dir="$HOME/.local/share/nvim/site/autoload"
-        mkdir -p "$_plug_dir"
-        curl -sfL 'https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim' \
-            --output "$_plug_dir/plug.vim"
-    fi
+    ensure_vim_plug
 
-    # --- Neovim plugins
-    if vim_plug_installed && [ -s "$HOME/.config/nvim/init.vim" ]; then
-        info "Installing Neovim plugins (NERDTree, ...)..."
-        nvim --headless +PlugInstall +qall 2>/dev/null || \
-            warn "Some Neovim plugins may not have been installed. Run :PlugInstall manually."
-    fi
+    install_nvim_plugins warn
 
-    # --- chezmoi
     brew_install_if_missing "chezmoi" chezmoi
 
-    # --- Claude Code CLI + config
     brew_install_if_missing "Claude Code" claude-code
-    if [ -x "${DOTFILES_DIR}/claude/install.sh" ]; then
-        info "Applying Claude Code configuration..."
-        sh "${DOTFILES_DIR}/claude/install.sh"
-    else
-        warn "claude/install.sh not found; skipping Claude Code configuration."
-    fi
+    install_claude_config warn
 
-    # --- opencode CLI
     brew_install_if_missing "opencode CLI" opencode
 
-    # --- chezmoi apply
     info "Applying dotfiles..."
     chezmoi apply --source "${DOTFILES_DIR}/${DOTFILES_SOURCE_SUBDIR}"
 
     # Ensure .zshrc is present (chezmoi may not overwrite an existing file).
     if [ -f "${DOTFILES_DIR}/${DOTFILES_SOURCE_SUBDIR}/.zshrc" ]; then
-        info "Copying .zshrc from dotfiles..."
-        cp "${DOTFILES_DIR}/${DOTFILES_SOURCE_SUBDIR}/.zshrc" "$HOME/.zshrc"
+        copy_dotfile "${DOTFILES_DIR}/${DOTFILES_SOURCE_SUBDIR}/.zshrc" \
+                     "$HOME/.zshrc" verbose
     fi
 
-    # --- zplug install
-    # Run in a clean zsh session without Oh My Zsh interfering.
-    # Tolerant of non-zero exit (e.g. zplug re-clobbers comp files) so the
-    # bootstrap path is not blocked by an optional cosmetic step.
-    info "Installing zsh plugins..."
-    ZPLUG_HOME="$(brew --prefix)/opt/zplug"
-    zsh -c "source $ZPLUG_HOME/init.zsh && zplug install" \
-        || warn "zplug install returned non-zero; you can run it manually later."
+    run_zplug_install
 
     # --- zsh as login shell
     if [ "$SHELL" != "/bin/zsh" ]; then
@@ -365,11 +431,7 @@ update() {
         return
     fi
 
-    # Re-apply macOS system preferences (idempotent; keeps prefs in sync
-    # when apply-settings.sh is updated).
-    if [ -x "${DOTFILES_DIR}/macos/apply-settings.sh" ]; then
-        DOTFILES="$DOTFILES_DIR" sh "${DOTFILES_DIR}/macos/apply-settings.sh" || true
-    fi
+    apply_macos_prefs true
 
     # Ensure brew is on PATH — needed because subsequent `brew --prefix` and
     # `brew install` calls depend on it regardless of how the parent shell
@@ -393,70 +455,20 @@ update() {
         return
     fi
 
-    # Keep JetBrains Mono font in sync in case it was updated.
-    if ! brew_pkg_installed font-jetbrains-mono; then
-        info "Installing JetBrains Mono font..."
-        brew install --cask font-jetbrains-mono
-    fi
+    brew_install_if_missing "JetBrains Mono" font-jetbrains-mono --cask
+    brew_install_if_missing "chezmoi" chezmoi
+    brew_install_if_missing "zplug" zplug
+    brew_install_if_missing "Neovim" neovim
+    brew_install_if_missing "Claude Code" claude-code
+    brew_install_if_missing "opencode CLI" opencode
 
-    if ! has_chezmoi; then
-        info "Installing chezmoi..."
-        brew install chezmoi
-    fi
+    install_claude_config true
 
-    if ! has_zplug; then
-        info "Installing zplug..."
-        brew install zplug
-    fi
+    sync_neovim_config
+    sync_nvim_symlinks true
 
-    if ! has_nvim; then
-        info "Installing Neovim..."
-        brew install neovim
-    fi
-
-    if ! has_claude; then
-        info "Installing Claude Code..."
-        brew install claude-code
-    fi
-
-    if ! has_opencode; then
-        info "Installing opencode CLI..."
-        brew install opencode
-    fi
-
-    # Ensure Claude Code managed configuration is in place.  The
-    # sub-script is idempotent, so re-running is safe.
-    if [ -x "${DOTFILES_DIR}/claude/install.sh" ]; then
-        sh "${DOTFILES_DIR}/claude/install.sh" || true
-    fi
-
-    # Keep Neovim config in sync with the dotfiles repo.
-    if [ -f "${DOTFILES_DIR}/${DOTFILES_SOURCE_SUBDIR}/config/nvim/init.vim" ]; then
-        mkdir -p "$HOME/.config/nvim"
-        info "Updating Neovim config..."
-        cp "${DOTFILES_DIR}/${DOTFILES_SOURCE_SUBDIR}/config/nvim/init.vim" \
-           "$HOME/.config/nvim/init.vim"
-    fi
-
-    # Keep vim/vi → nvim symlinks in sync.
-    if mkdir -p "$HOME/.local/bin" 2>/dev/null; then
-        for _bin in vim vi; do
-            ln -sf "$(command -v nvim)" "$HOME/.local/bin/$_bin" 2>/dev/null || true
-        done
-    fi
-
-    # Keep vim-plug and plugins in sync.
-    if ! vim_plug_installed; then
-        info "Installing vim-plug for Neovim..."
-        _plug_dir="$HOME/.local/share/nvim/site/autoload"
-        mkdir -p "$_plug_dir"
-        curl -sfL 'https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim' \
-            --output "$_plug_dir/plug.vim"
-    fi
-    if vim_plug_installed; then
-        info "Updating Neovim plugins..."
-        nvim --headless +PlugInstall +qall 2>/dev/null || true
-    fi
+    ensure_vim_plug
+    install_nvim_plugins true
 
     if [ ! -d "$HOME/.oh-my-zsh" ]; then
         warn "Oh My Zsh missing — re-running fresh install."
@@ -464,26 +476,18 @@ update() {
         return
     fi
 
-    # Re-apply the iTerm2 preferences snapshot.
-    if [ -f "${DOTFILES_DIR}/iterm2/apply-iterm.sh" ]; then
-        info "Re-applying iTerm2 preferences..."
-        DOTFILES="$DOTFILES_DIR" sh "${DOTFILES_DIR}/iterm2/apply-iterm.sh" || true
-    fi
+    info "Re-applying iTerm2 preferences..."
+    apply_iterm_prefs true
 
-    # Re-apply chezmoi-managed dotfiles.
     info "Applying updated dotfiles..."
     chezmoi apply --source "${DOTFILES_DIR}/${DOTFILES_SOURCE_SUBDIR}"
 
-    # Keep .zshrc in sync.
     if [ -f "${DOTFILES_DIR}/${DOTFILES_SOURCE_SUBDIR}/.zshrc" ]; then
-        cp "${DOTFILES_DIR}/${DOTFILES_SOURCE_SUBDIR}/.zshrc" "$HOME/.zshrc"
+        copy_dotfile "${DOTFILES_DIR}/${DOTFILES_SOURCE_SUBDIR}/.zshrc" \
+                     "$HOME/.zshrc"
     fi
 
-    # Re-run zplug install to pick up any new plugins.
-    info "Re-installing zsh plugins..."
-    ZPLUG_HOME="$(brew --prefix)/opt/zplug"
-    zsh -c "source $ZPLUG_HOME/init.zsh && zplug install" \
-        || warn "zplug install returned non-zero; you can run it manually later."
+    run_zplug_install
 
     info "Dotfiles updated successfully."
 }
