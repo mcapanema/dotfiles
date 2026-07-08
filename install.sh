@@ -48,6 +48,20 @@ has_iterm2() { brew_pkg_installed iterm2; }
 # has_zplug  — true if the Homebrew formula is installed
 has_zplug()  { brew_pkg_installed zplug; }
 
+# brew_install_if_missing — install a Homebrew formula/cask if not present.
+#   $1: human-readable name for log lines (e.g. "iTerm2", "zplug")
+#   $2: package name (e.g. iterm2, zplug, font-jetbrains-mono)
+#   $3+: optional brew install flags (e.g. --cask)
+brew_install_if_missing() {
+    _kind="$1"; _pkg="$2"; shift 2
+    if brew_pkg_installed "$_pkg"; then
+        info "$_kind already installed, skipping."
+    else
+        info "Installing $_kind..."
+        brew install "$@" "$_pkg"
+    fi
+}
+
 # has_chezmoi — true if chezmoi binary is on PATH
 has_chezmoi() { has chezmoi; }
 
@@ -209,12 +223,7 @@ fresh_install() {
     # (JetBrainsMono-Regular) and by Neovim's init.vim.  Install it via
     # Homebrew so the font is available for iTerm2 to use immediately
     # after the preferences are applied.
-    if ! brew_pkg_installed font-jetbrains-mono; then
-        info "Installing JetBrains Mono font..."
-        brew install --cask font-jetbrains-mono
-    else
-        info "JetBrains Mono already installed, skipping."
-    fi
+    brew_install_if_missing "JetBrains Mono" font-jetbrains-mono --cask
 
     # --- git via Homebrew
     # Install the brew-managed git so it takes precedence over CLT's older
@@ -224,12 +233,7 @@ fresh_install() {
     brew install git
 
     # --- iTerm2
-    if ! has_iterm2; then
-        info "Installing iTerm2..."
-        brew install --cask iterm2
-    else
-        info "iTerm2 already installed, skipping."
-    fi
+    brew_install_if_missing "iTerm2" iterm2 --cask
 
     # --- Oh My Zsh
     if [ ! -d "$HOME/.oh-my-zsh" ]; then
@@ -262,20 +266,10 @@ fresh_install() {
     fi
 
     # --- zplug
-    if ! has_zplug; then
-        info "Installing zplug..."
-        brew install zplug
-    else
-        info "zplug already installed, skipping."
-    fi
+    brew_install_if_missing "zplug" zplug
 
     # --- Neovim
-    if ! has_nvim; then
-        info "Installing Neovim..."
-        brew install neovim
-    else
-        info "Neovim already installed, skipping."
-    fi
+    brew_install_if_missing "Neovim" neovim
 
     # --- Neovim config
     if [ -f "${DOTFILES_DIR}/${DOTFILES_SOURCE_SUBDIR}/config/nvim/init.vim" ]; then
@@ -313,20 +307,10 @@ fresh_install() {
     fi
 
     # --- chezmoi
-    if ! has_chezmoi; then
-        info "Installing chezmoi..."
-        brew install chezmoi
-    else
-        info "chezmoi already installed, skipping."
-    fi
+    brew_install_if_missing "chezmoi" chezmoi
 
     # --- Claude Code CLI + config
-    if ! has_claude; then
-        info "Installing Claude Code..."
-        brew install claude-code
-    else
-        info "Claude Code already installed, skipping."
-    fi
+    brew_install_if_missing "Claude Code" claude-code
     if [ -x "${DOTFILES_DIR}/claude/install.sh" ]; then
         info "Applying Claude Code configuration..."
         sh "${DOTFILES_DIR}/claude/install.sh"
@@ -335,12 +319,7 @@ fresh_install() {
     fi
 
     # --- opencode CLI
-    if ! has_opencode; then
-        info "Installing opencode CLI..."
-        brew install opencode
-    else
-        info "opencode already installed, skipping."
-    fi
+    brew_install_if_missing "opencode CLI" opencode
 
     # --- chezmoi apply
     info "Applying dotfiles..."
