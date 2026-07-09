@@ -18,6 +18,9 @@ sh -c "$(curl -fsSL https://raw.githubusercontent.com/mcapanema/dotfiles/main/in
 | **Homebrew** | Package manager for macOS |
 | **Oh My Zsh** | Zsh framework with zplug plugin manager |
 | **chezmoi** | Dotfile manager (source in `dotfiles/` subdirectory) |
+| **Claude Code** | Anthropic's terminal-based AI coding assistant (`claude` CLI) |
+| **opencode** | opencode CLI |
+| **Desktop apps** | Google Chrome, Firefox, Slack, WhatsApp, Telegram, ChatGPT, Claude |
 | **macOS settings** | Developer-friendly system defaults (keyboard, trackpad, security, Time Machine) |
 
 ---
@@ -34,14 +37,15 @@ The script will:
 
 1. Ensure Command Line Tools / git are available
 2. Install Homebrew if missing
-3. Install iTerm2, Neovim, zplug, chezmoi
-4. Import iTerm2 preferences from the versioned snapshot
-5. Bootstrap Oh My Zsh and zplug plugins (Pure prompt, syntax highlighting, autosuggestions)
-6. Symlink `vim` and `vi` → `nvim` in `~/.local/bin`
-7. Install NERDTree via vim-plug
-8. Apply all managed dotfiles via chezmoi
-9. Set zsh as the login shell
-10. Apply sensible macOS system defaults (keyboard repeat, trackpad tap-to-click, security, Time Machine)
+3. Install iTerm2, Neovim, zplug, chezmoi, Claude Code, opencode
+4. Install desktop apps: Google Chrome, Firefox, Slack, WhatsApp, Telegram, ChatGPT, Claude
+5. Import iTerm2 preferences from the versioned snapshot
+6. Bootstrap Oh My Zsh and zplug plugins (Pure prompt, syntax highlighting, autosuggestions)
+7. Symlink `vim` and `vi` → `nvim` in `~/.local/bin`
+8. Install NERDTree via vim-plug
+9. Apply all managed dotfiles via chezmoi
+10. Set zsh as the login shell
+11. Apply sensible macOS system defaults (keyboard repeat, trackpad tap-to-click, security, Time Machine)
 
 ### Update
 

@@ -400,6 +400,15 @@ fresh_install() {
 
     brew_install_if_missing "opencode CLI" opencode
 
+    # Desktop apps (browsers, messaging, AI assistants).
+    brew_install_if_missing "Google Chrome" google-chrome --cask
+    brew_install_if_missing "Firefox" firefox --cask
+    brew_install_if_missing "Slack" slack --cask
+    brew_install_if_missing "WhatsApp" whatsapp --cask
+    brew_install_if_missing "Telegram" telegram --cask
+    brew_install_if_missing "ChatGPT" chatgpt --cask
+    brew_install_if_missing "Claude" claude --cask
+
     info "Applying dotfiles..."
     chezmoi apply --source "${DOTFILES_DIR}/${DOTFILES_SOURCE_SUBDIR}"
 
@@ -466,6 +475,15 @@ update() {
     brew_install_if_missing "Neovim" neovim
     brew_install_if_missing "Claude Code" claude-code
     brew_install_if_missing "opencode CLI" opencode
+
+    # Desktop apps (browsers, messaging, AI assistants).
+    brew_install_if_missing "Google Chrome" google-chrome --cask
+    brew_install_if_missing "Firefox" firefox --cask
+    brew_install_if_missing "Slack" slack --cask
+    brew_install_if_missing "WhatsApp" whatsapp --cask
+    brew_install_if_missing "Telegram" telegram --cask
+    brew_install_if_missing "ChatGPT" chatgpt --cask
+    brew_install_if_missing "Claude" claude --cask
 
     install_claude_config true
 

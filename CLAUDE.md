@@ -153,6 +153,13 @@ brew_install_if_missing chezmoi
 brew_install_if_missing claude-code
 install_claude_config
 brew_install_if_missing opencode
+brew_install_if_missing Google Chrome (google-chrome --cask)
+brew_install_if_missing Firefox (firefox --cask)
+brew_install_if_missing Slack (slack --cask)
+brew_install_if_missing WhatsApp (whatsapp --cask)
+brew_install_if_missing Telegram (telegram --cask)
+brew_install_if_missing ChatGPT (chatgpt --cask)
+brew_install_if_missing Claude (claude --cask)
 chezmoi apply --source "$DOTFILES/dotfiles"
 copy_dotfile (dotfiles/.zshrc → $HOME/.zshrc)
 run_zplug_install
@@ -315,18 +322,34 @@ alias rm='nocorrect rm'   # Prevent zsh spell-checker from correcting rm
 
 ## 9. Homebrew Packages
 
+### Formulae
+
 | Package | Purpose |
 |---|---|
 | `neovim` | Text editor |
-| `iterm2` | Terminal emulator |
 | `chezmoi` | Dotfile manager |
 | `zplug` | Zsh plugin manager |
-| `claude-code` | Claude Code integration |
+| `claude-code` | Claude Code CLI (terminal AI coding assistant, `claude` binary) — **distinct from the `claude` cask** |
 | `opencode` | opencode CLI |
 | `git` | Version control (managed by brew, not CLT) |
 
-**Casks:** `font-jetbrains-mono` — monospace font for NERDTree; referenced in iTerm2 prefs
-as `JetBrainsMono-Regular`. The font name must match exactly in the CFString plist entry.
+### Casks
+
+| Cask | Purpose |
+|---|---|
+| `iterm2` | Terminal emulator |
+| `font-jetbrains-mono` | Monospace font for NERDTree; referenced in iTerm2 prefs as `JetBrainsMono-Regular`. The font name must match exactly in the CFString plist entry. |
+| `google-chrome` | Web browser |
+| `firefox` | Web browser |
+| `slack` | Team messaging |
+| `whatsapp` | Messaging |
+| `telegram` | Messaging |
+| `chatgpt` | OpenAI ChatGPT desktop app |
+| `claude` | Anthropic Claude desktop app (GUI) — **distinct from the `claude-code` CLI formula** |
+
+**Note:** `claude-code` (formula) installs the `claude` CLI binary; `claude` (cask) installs
+the `Claude.app` desktop GUI app. They are unrelated Homebrew packages that happen to share
+a vendor. Do not conflate them.
 
 ---
 
