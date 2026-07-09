@@ -336,7 +336,7 @@ install_claude_config() {
 copy_dotfile() {
     _src="$1"
     _dst="$2"
-    [ "$3" = "verbose" ] && info "Copying $(basename "$_src") from dotfiles..."
+    [ "${3:-}" = "verbose" ] && info "Copying $(basename "$_src") from dotfiles..."
     cp "$_src" "$_dst"
 }
 
