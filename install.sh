@@ -201,20 +201,40 @@ apply_macos_prefs() {
 
 # launch_iterm_once — opens iTerm2 the first time so its defaults domain
 # is registered with defaults(1) before the snapshot is imported.  No-op
-# if iTerm2 is already running or not installed yet.
+# if the domain is already registered, iTerm2 is currently running and
+# the domain is present, or iTerm2 isn't installed yet.
+#
+# On first launch iTerm2 displays welcome/permissions dialogs and the
+# com.googlecode.iterm2 defaults domain is only registered once that
+# first-run sequence finishes — so we poll for the domain (not the
+# process) for up to 60s.  The user is told to dismiss any dialogs in
+# the iTerm2 window so the script continues.
 launch_iterm_once() {
     if [ ! -d "/Applications/iTerm.app" ]; then
         return 0
     fi
-    if pgrep -f "iTerm.app/Contents/MacOS/iTerm2" >/dev/null 2>&1; then
+    # Fast path: domain already registered (iTerm ran previously).
+    if defaults read com.googlecode.iterm2 >/dev/null 2>&1; then
         return 0
     fi
-    info "Launching iTerm2 once to register its defaults domain..."
-    open -a iTerm 2>/dev/null || true
-    for _ in 1 2 3 4 5 6 7 8 9 10; do
+    # Domain not registered.  If iTerm isn't already running, launch it.
+    if ! pgrep -f "iTerm.app/Contents/MacOS/iTerm2" >/dev/null 2>&1; then
+        info "Launching iTerm2 once to register its defaults domain..."
+        open -a iTerm 2>/dev/null || true
+    fi
+    info "Waiting for iTerm2 to register its defaults domain..."
+    info "(if a first-run dialog appears in iTerm2, dismiss it to continue.)"
+    for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 \
+             21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 \
+             41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60; do
         sleep 1
-        pgrep -f "iTerm.app/Contents/MacOS/iTerm2" >/dev/null 2>&1 && return 0
+        if defaults read com.googlecode.iterm2 >/dev/null 2>&1; then
+            info "iTerm2 defaults domain registered."
+            return 0
+        fi
     done
+    warn "iTerm2 defaults domain did not register within 60s; " \
+         "apply-iterm.sh may fail. Dismiss any open dialogs in iTerm2 and re-run."
 }
 
 apply_iterm_prefs() {
