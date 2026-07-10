@@ -31,3 +31,25 @@ fi
 
 # Local bin
 export PATH="$HOME/.local/bin:$PATH"
+
+# ---- Dev toolchains (sourced after OMZ/zplug so PATH manipulation wins) ----
+
+# nvm (Node version manager) — brew formula
+export NVM_DIR="$HOME/.nvm"
+[ -s "$(brew --prefix)/opt/nvm/nvm.sh" ] && . "$(brew --prefix)/opt/nvm/nvm.sh"
+
+# rvm (Ruby version manager) — installed via official installer from get.rvm.io
+# Add rvm binary dir for non-interactive shells (cheap; no init cost)
+case ":${PATH}:" in
+  *":$HOME/.rvm/bin:"*) ;;
+  *) export PATH="$HOME/.rvm/bin:$PATH" ;;
+esac
+# Source rvm if present — must come AFTER nvm so rvm's PATH adjustments win
+[ -s "$HOME/.rvm/scripts/rvm" ] && . "$HOME/.rvm/scripts/rvm"
+
+# Rust (rustup) — brew's keg-only rustup formula's shims live at
+# /opt/homebrew/opt/rustup/bin (already on PATH via .zprofile).
+# `~/.cargo/env` is sourced if it exists (for non-brew rustup installs).
+[ -s "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
+
+# uv / pipx — pipx installs go to ~/.local/bin (already on PATH above)
