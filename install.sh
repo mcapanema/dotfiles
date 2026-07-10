@@ -419,21 +419,18 @@ fresh_install() {
 
     install_devtools warn
 
-    brew_install_if_missing "opencode CLI" opencode
-
     # Desktop apps (browsers, messaging, AI assistants).
     brew_install_if_missing "Google Chrome" google-chrome --cask
     brew_install_if_missing "Firefox" firefox --cask
     brew_install_if_missing "Slack" slack --cask
     brew_install_if_missing "WhatsApp" whatsapp --cask
     brew_install_if_missing "Telegram" telegram --cask
+    brew_install_if_missing "Mos" mos --cask
     brew_install_if_missing "ChatGPT" chatgpt --cask
     brew_install_if_missing "Claude" claude --cask
-
-    # AI assistant tools + mouse utility.
+    brew_install_if_missing "opencode CLI" opencode
     brew_install_if_missing "Codex CLI" codex --cask
     brew_install_if_missing "Codex" codex-app --cask
-    brew_install_if_missing "Mos" mos --cask
 
     info "Applying dotfiles..."
     chezmoi apply --source "${DOTFILES_DIR}/${DOTFILES_SOURCE_SUBDIR}"
@@ -500,7 +497,6 @@ update() {
     brew_install_if_missing "zplug" zplug
     brew_install_if_missing "Neovim" neovim
     brew_install_if_missing "Claude Code" claude-code
-    brew_install_if_missing "opencode CLI" opencode
 
     # Desktop apps (browsers, messaging, AI assistants).
     brew_install_if_missing "Google Chrome" google-chrome --cask
@@ -508,13 +504,12 @@ update() {
     brew_install_if_missing "Slack" slack --cask
     brew_install_if_missing "WhatsApp" whatsapp --cask
     brew_install_if_missing "Telegram" telegram --cask
+    brew_install_if_missing "Mos" mos --cask
     brew_install_if_missing "ChatGPT" chatgpt --cask
     brew_install_if_missing "Claude" claude --cask
-
-    # AI assistant tools + mouse utility.
+    brew_install_if_missing "opencode CLI" opencode
     brew_install_if_missing "Codex CLI" codex --cask
     brew_install_if_missing "Codex" codex-app --cask
-    brew_install_if_missing "Mos" mos --cask
 
     install_claude_config true
 
