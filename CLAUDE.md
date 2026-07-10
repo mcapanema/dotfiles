@@ -160,17 +160,35 @@ brew_install_if_missing chezmoi
 brew_install_if_missing claude-code
 install_claude_config
 install_devtools
-brew_install_if_missing opencode
+# Desktop apps — Browsers
 brew_install_if_missing Google Chrome (google-chrome --cask)
 brew_install_if_missing Firefox (firefox --cask)
+# Desktop apps — Communication & Messaging
 brew_install_if_missing Slack (slack --cask)
 brew_install_if_missing WhatsApp (whatsapp --cask)
 brew_install_if_missing Telegram (telegram --cask)
+# Desktop apps — AI Assistants
 brew_install_if_missing ChatGPT (chatgpt --cask)
 brew_install_if_missing Claude (claude --cask)
-brew_install_if_missing Codex CLI (codex --cask)
 brew_install_if_missing Codex (codex-app --cask)
+# Desktop apps — Productivity & Utilities
 brew_install_if_missing Mos (mos --cask)
+brew_install_if_missing Alfred (alfred --cask)
+brew_install_if_missing Contexts (contexts --cask)
+brew_install_if_missing BetterTouchTool (bettertouchtool --cask)
+brew_install_if_missing Moom (moom --cask)
+brew_install_if_missing AppCleaner (appcleaner --cask)
+# Desktop apps — Menu Bar & System Monitoring
+brew_install_if_missing iStat Menus (istat-menus --cask)
+brew_install_if_missing Bartender (bartender --cask)
+# Desktop apps — Security & Networking
+brew_install_if_missing 1Password (1password --cask)
+brew_install_if_missing NordVPN (nordvpn --cask)
+# Desktop apps — Developer Tools
+brew_install_if_missing Docker Desktop (docker-desktop --cask)
+# CLI tools (not desktop GUI apps)
+brew_install_if_missing opencode CLI (opencode)
+brew_install_if_missing Codex CLI (codex --cask)
 chezmoi apply --source "$DOTFILES/dotfiles"
 copy_dotfile (dotfiles/.zshrc → $HOME/.zshrc)
 run_zplug_install
@@ -352,21 +370,66 @@ alias rm='nocorrect rm'   # Prevent zsh spell-checker from correcting rm
 
 ### Casks
 
+Casks are grouped below to mirror the grouped `brew_install_if_missing` blocks in
+`install.sh` (both `fresh_install` and `update`).
+
+#### Browsers
+
+| Cask | Purpose |
+|---|---|
+| `google-chrome` | Web browser |
+| `firefox` | Web browser |
+
+#### Communication & Messaging
+
+| Cask | Purpose |
+|---|---|
+| `slack` | Team messaging |
+| `whatsapp` | Messaging |
+| `telegram` | Messaging |
+
+#### AI Assistants
+
+| Cask | Purpose |
+|---|---|
+| `chatgpt` | OpenAI ChatGPT desktop app |
+| `claude` | Anthropic Claude desktop app (GUI) — **distinct from the `claude-code` CLI formula** |
+| `codex-app` | OpenAI Codex desktop app (GUI) for managing coding agents |
+
+#### Productivity & Utilities
+
+| Cask | Purpose |
+|---|---|
+| `mos` | Smooth scrolling + independent scroll direction per device |
+| `alfred` | Application launcher and productivity software (paid "Powerpack" for advanced features) |
+| `contexts` | Window switcher — more productive Cmd-Tab / Alt-Tab alternative (paid) |
+| `bettertouchtool` | Input-device customisation and window snapping automation (paid, trial-ware) |
+| `moom` | Window resizing/zoom utility (paid, trial-ware) |
+| `appcleaner` | Application uninstaller — removes apps and their associated support files |
+
+#### Menu Bar & System Monitoring
+
+| Cask | Purpose |
+|---|---|
+| `istat-menus` | System monitoring (CPU, memory, network, sensors) in the menu bar (paid, trial-ware) |
+| `bartender` | Menu-bar icon organiser — hide/reorder status items (paid, trial-ware) |
+
+#### Security & Networking
+
+| Cask | Purpose |
+|---|---|
+| `1password` | Password manager |
+| `nordvpn` | VPN client for secure/private internet access |
+
+#### Developer Tools
+
 | Cask | Purpose |
 |---|---|
 | `iterm2` | Terminal emulator |
 | `font-jetbrains-mono` | Monospace font for NERDTree; referenced in iTerm2 prefs as `JetBrainsMono-Regular`. The font name must match exactly in the CFString plist entry. |
 | `visual-studio-code` | VS Code editor (user settings symlinked from `devtools/vscode/settings.json`) |
-| `google-chrome` | Web browser |
-| `firefox` | Web browser |
-| `slack` | Team messaging |
-| `whatsapp` | Messaging |
-| `telegram` | Messaging |
-| `chatgpt` | OpenAI ChatGPT desktop app |
-| `claude` | Anthropic Claude desktop app (GUI) — **distinct from the `claude-code` CLI formula** |
-| `codex` | OpenAI Codex CLI (terminal coding agent, `codex` binary) — **distinct from the `codex-app` cask** |
-| `codex-app` | OpenAI Codex desktop app (GUI) for managing coding agents |
-| `mos` | Smooth scrolling + independent scroll direction per device |
+| `docker-desktop` | Docker Desktop GUI for containerised development. **The `docker` formula (CLI-only) is intentionally NOT installed** — `docker-desktop --cask` is the sole source of `docker` on this machine. **Note:** as of 2024 Docker Inc. requires a paid subscription for larger organisations using Docker Desktop; personal/small-org use remains free. |
+| `codex` | OpenAI Codex CLI (terminal coding agent, `codex` binary) — **distinct from the `codex-app` cask**. Listed here because it ships as a cask, not a formula. |
 
 **Note:** `claude-code` (formula) installs the `claude` CLI binary; `claude` (cask) installs
 the `Claude.app` desktop GUI app. They are unrelated Homebrew packages that happen to share
@@ -375,6 +438,11 @@ a vendor. Do not conflate them.
 **Note:** `codex` (cask) installs the `codex` CLI binary; `codex-app` (cask) installs
 the `Codex.app` desktop GUI app for managing coding agents. They are unrelated Homebrew
 packages that happen to share a vendor. Do not conflate them.
+
+**Note on Amphetamine:** Amphetamine (keep-Mac-awake utility) is **intentionally NOT**
+installed via Homebrew because it is distributed exclusively through the Mac App Store
+(no cask exists). Install it manually from the App Store if desired. Alternatives
+available as casks include `keepingyouawake` and `caffeine` (not installed by this repo).
 
 **Note on Node:** `nvm` is the sole source of Node versions. The brew `node` formula is
 intentionally **not** installed and is removed by `devtools/install.sh` if found. This is by

@@ -419,18 +419,42 @@ fresh_install() {
 
     install_devtools warn
 
-    # Desktop apps (browsers, messaging, AI assistants).
+    # Desktop apps — Browsers
     brew_install_if_missing "Google Chrome" google-chrome --cask
     brew_install_if_missing "Firefox" firefox --cask
+
+    # Desktop apps — Communication & Messaging
     brew_install_if_missing "Slack" slack --cask
     brew_install_if_missing "WhatsApp" whatsapp --cask
     brew_install_if_missing "Telegram" telegram --cask
-    brew_install_if_missing "Mos" mos --cask
+
+    # Desktop apps — AI Assistants
     brew_install_if_missing "ChatGPT" chatgpt --cask
     brew_install_if_missing "Claude" claude --cask
+    brew_install_if_missing "Codex" codex-app --cask
+
+    # Desktop apps — Productivity & Utilities
+    brew_install_if_missing "Mos" mos --cask
+    brew_install_if_missing "Alfred" alfred --cask
+    brew_install_if_missing "Contexts" contexts --cask
+    brew_install_if_missing "BetterTouchTool" bettertouchtool --cask
+    brew_install_if_missing "Moom" moom --cask
+    brew_install_if_missing "AppCleaner" appcleaner --cask
+
+    # Desktop apps — Menu Bar & System Monitoring
+    brew_install_if_missing "iStat Menus" istat-menus --cask
+    brew_install_if_missing "Bartender" bartender --cask
+
+    # Desktop apps — Security & Networking
+    brew_install_if_missing "1Password" 1password --cask
+    brew_install_if_missing "NordVPN" nordvpn --cask
+
+    # Desktop apps — Developer Tools
+    brew_install_if_missing "Docker Desktop" docker-desktop --cask
+
+    # CLI tools (not desktop GUI apps).
     brew_install_if_missing "opencode CLI" opencode
     brew_install_if_missing "Codex CLI" codex --cask
-    brew_install_if_missing "Codex" codex-app --cask
 
     info "Applying dotfiles..."
     chezmoi apply --source "${DOTFILES_DIR}/${DOTFILES_SOURCE_SUBDIR}"
@@ -498,18 +522,42 @@ update() {
     brew_install_if_missing "Neovim" neovim
     brew_install_if_missing "Claude Code" claude-code
 
-    # Desktop apps (browsers, messaging, AI assistants).
+    # Desktop apps — Browsers
     brew_install_if_missing "Google Chrome" google-chrome --cask
     brew_install_if_missing "Firefox" firefox --cask
+
+    # Desktop apps — Communication & Messaging
     brew_install_if_missing "Slack" slack --cask
     brew_install_if_missing "WhatsApp" whatsapp --cask
     brew_install_if_missing "Telegram" telegram --cask
-    brew_install_if_missing "Mos" mos --cask
+
+    # Desktop apps — AI Assistants
     brew_install_if_missing "ChatGPT" chatgpt --cask
     brew_install_if_missing "Claude" claude --cask
+    brew_install_if_missing "Codex" codex-app --cask
+
+    # Desktop apps — Productivity & Utilities
+    brew_install_if_missing "Mos" mos --cask
+    brew_install_if_missing "Alfred" alfred --cask
+    brew_install_if_missing "Contexts" contexts --cask
+    brew_install_if_missing "BetterTouchTool" bettertouchtool --cask
+    brew_install_if_missing "Moom" moom --cask
+    brew_install_if_missing "AppCleaner" appcleaner --cask
+
+    # Desktop apps — Menu Bar & System Monitoring
+    brew_install_if_missing "iStat Menus" istat-menus --cask
+    brew_install_if_missing "Bartender" bartender --cask
+
+    # Desktop apps — Security & Networking
+    brew_install_if_missing "1Password" 1password --cask
+    brew_install_if_missing "NordVPN" nordvpn --cask
+
+    # Desktop apps — Developer Tools
+    brew_install_if_missing "Docker Desktop" docker-desktop --cask
+
+    # CLI tools (not desktop GUI apps).
     brew_install_if_missing "opencode CLI" opencode
     brew_install_if_missing "Codex CLI" codex --cask
-    brew_install_if_missing "Codex" codex-app --cask
 
     install_claude_config true
 
