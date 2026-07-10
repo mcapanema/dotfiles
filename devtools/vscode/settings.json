@@ -1,0 +1,21 @@
+{
+  "editor.fontFamily": "JetBrainsMono-Regular, Menlo, Monaco, monospace",
+  "editor.fontSize": 14,
+  "editor.tabSize": 4,
+  "editor.insertSpaces": true,
+  "editor.formatOnSave": true,
+  "editor.rulers": [100],
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+  "files.autoSave": "onFocusChange",
+  "[rust]": { "editor.defaultFormatter": "rust-lang.rust-analyzer" },
+  "[python]": { "editor.defaultFormatter": "charliermarsh.ruff" },
+  "[javascript]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[typescript]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[ruby]": { "editor.defaultFormatter": "Shopify.ruby-lsp" },
+  "telemetry.telemetryLevel": "off",
+  "workbench.startupEditor": "none",
+  "workbench.colorTheme": "Default Dark+",
+  "git.confirmSync": false,
+  "git.autofetch": true
+}

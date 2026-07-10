@@ -331,6 +331,25 @@ install_claude_config() {
     fi
 }
 
+# install_devtools — applies devtools/install.sh if shipped.  Installs
+# VSCode, Node/nvm, Ruby/rvm, Python/uv/pipx, Rust/rustup and symlinks
+# VSCode user settings into ~/Library/Application Support/Code/User/.
+#   $1: tolerance — "true" swallows errors, "warn" surfaces them.
+install_devtools() {
+    _tolerance="${1:-warn}"
+    if [ ! -x "${DOTFILES_DIR}/devtools/install.sh" ]; then
+        [ "$_tolerance" = "warn" ] \
+            && warn "devtools/install.sh not found; skipping dev toolchains."
+        return 0
+    fi
+    if [ "$_tolerance" = "warn" ]; then
+        info "Installing development toolchains..."
+        sh "${DOTFILES_DIR}/devtools/install.sh" "$_tolerance"
+    else
+        sh "${DOTFILES_DIR}/devtools/install.sh" "$_tolerance" || true
+    fi
+}
+
 # copy_dotfile — copies a managed file from the repo to $HOME if it
 # exists.  Used for .zshrc which chezmoi may not overwrite.
 copy_dotfile() {
@@ -397,6 +416,8 @@ fresh_install() {
 
     brew_install_if_missing "Claude Code" claude-code
     install_claude_config warn
+
+    install_devtools warn
 
     brew_install_if_missing "opencode CLI" opencode
 
@@ -486,6 +507,8 @@ update() {
     brew_install_if_missing "Claude" claude --cask
 
     install_claude_config true
+
+    install_devtools true
 
     sync_neovim_config
     sync_nvim_symlinks true
