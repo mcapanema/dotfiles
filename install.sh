@@ -21,7 +21,7 @@
 set -euo pipefail
 
 # ---------------------------- Constants ----------------------------
-REPO_URL="git@github.com:mcapanema/dotfiles.git"
+REPO_URL="https://github.com/mcapanema/dotfiles.git"
 BREW_INSTALL_URL="https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh"
 MARKER_FILE="$HOME/.dotfiles-installed"
 DOTFILES_DIR="$HOME/.dotfiles"
