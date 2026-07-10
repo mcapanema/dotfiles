@@ -41,19 +41,22 @@ fresh-install and update paths.
 │   ├── .zshrc                  # Interactive shell config; force-copied after chezmoi apply
 │   ├── .zprofile               # Login shell config
 │   └── config/nvim/init.vim    # Neovim init file
-└── claude/                      # Claude Code / opencode integration
-    ├── install.sh               # Claude Code + opencode installer
-    ├── statusline-command.sh    # Statusline renderer
-    ├── config/settings.json     # API settings
-    ├── templates/.zshenv       # chezmoi template for API config (conditional source in .zshenv)
-    └── test/                    # Internal test fixtures (do not ship)
+├── claude/                      # Claude Code / opencode integration
+│   ├── install.sh               # Claude Code + opencode installer
+│   ├── statusline-command.sh    # Statusline renderer
+│   ├── config/settings.json     # API settings
+│   ├── templates/.zshenv       # chezmoi template for API config (conditional source in .zshenv)
+│   └── test/                    # Internal test fixtures (do not ship)
+└── devtools/                    # Development toolchains installer
+    ├── install.sh               # VSCode + Node/nvm + Ruby/rvm + Python/uv/pipx + Rust/rustup
+    └── vscode/settings.json    # Managed VSCode user settings (symlinked into ~/Library/Application Support/Code/User/)
 ```
 
 ### Edit freely
 
 `dotfiles/.zshenv`, `dotfiles/.zshrc`, `dotfiles/.zprofile`, `dotfiles/config/nvim/init.vim`,
 `macos/apply-settings.sh`, `iterm2/apply-iterm.sh`, `claude/install.sh`, `claude/statusline-command.sh`,
-`claude/config/settings.json`, `CLAUDE.md`, `README.md`
+`claude/config/settings.json`, `devtools/install.sh`, `devtools/vscode/settings.json`, `CLAUDE.md`, `README.md`
 
 ### Edit with care — verify after changing
 
@@ -63,6 +66,9 @@ fresh-install and update paths.
 | `iterm2/com.googlecode.iterm2.plist.export` | Run `plutil -lint` before committing |
 | `chezmoi.toml` | `diff` before `chezmoi apply` |
 | `claude/templates/.zshenv` | Must be valid zsh syntax when sourced; test with `zsh -n` |
+| `devtools/install.sh` | Run shellcheck; trace both `fresh_install` and `update` call sites |
+| `devtools/vscode/settings.json` | Validate JSON (`python3 -m json.tool`) before committing |
+| `dotfiles/.zshrc` | `zsh -n` after editing (nvm/rvm/rust lazy-loaders live here) |
 
 ---
 
@@ -115,6 +121,7 @@ Each accepts a `tolerance` arg: `"warn"` surfaces failures (fresh-install contra
 | `ensure_vim_plug` | Downloads `plug.vim` into `$HOME/.local/share/nvim/site/autoload` if absent |
 | `install_nvim_plugins` | Runs `nvim --headless +PlugInstall +qall`; tolerates errors |
 | `install_claude_config` | Runs `claude/install.sh`; tolerance controls whether errors are surfaced |
+| `install_devtools` | Runs `devtools/install.sh` (VSCode + Node/nvm + Ruby/rvm + Python/uv/pipx + Rust/rustup); tolerance controls whether errors are surfaced |
 | `copy_dotfile` | Force-copies `dotfiles/.zshrc` → `$HOME/.zshrc` (see note below) |
 | `run_zplug_install` | Runs `zplug install` in a clean zsh session; tolerates non-zero exit by design |
 
@@ -152,6 +159,7 @@ install_nvim_plugins
 brew_install_if_missing chezmoi
 brew_install_if_missing claude-code
 install_claude_config
+install_devtools
 brew_install_if_missing opencode
 brew_install_if_missing Google Chrome (google-chrome --cask)
 brew_install_if_missing Firefox (firefox --cask)
@@ -304,6 +312,7 @@ set -o vi                  # Vi line editing
 bindkey -v                 # Vi keymap
 alias rm='nocorrect rm'   # Prevent zsh spell-checker from correcting rm
 # Oh My Zsh + zplug + Pure prompt
+# Dev toolchains lazy-loaders (nvm, rvm, ~/.cargo/env) — see Section 11
 ```
 
 ---
@@ -332,6 +341,11 @@ alias rm='nocorrect rm'   # Prevent zsh spell-checker from correcting rm
 | `claude-code` | Claude Code CLI (terminal AI coding assistant, `claude` binary) — **distinct from the `claude` cask** |
 | `opencode` | opencode CLI |
 | `git` | Version control (managed by brew, not CLT) |
+| `nvm` | Node version manager (sourced in `.zshrc`; brew `node` formula intentionally NOT installed — nvm owns Node) |
+| `python@3.14` | Python 3 interpreter (`python3`, `pip3`); aliased as `python`, `python3` |
+| `uv` | Fast Python package installer/resolver (alternative to pip/virtualenv); also manages Python versions |
+| `pipx` | Run global CLI Python tools in isolated envs (e.g. `pipx install black`) |
+| `rustup` | Rust toolchain installer (keg-only — invoke via `$(brew --prefix rustup)/bin/rustup`); manages `rustc`/`cargo`/`clippy`. Formula 1.29.0_2+ no longer ships `rustup-init` — use `rustup install stable` to bootstrap. |
 
 ### Casks
 
@@ -339,6 +353,7 @@ alias rm='nocorrect rm'   # Prevent zsh spell-checker from correcting rm
 |---|---|
 | `iterm2` | Terminal emulator |
 | `font-jetbrains-mono` | Monospace font for NERDTree; referenced in iTerm2 prefs as `JetBrainsMono-Regular`. The font name must match exactly in the CFString plist entry. |
+| `visual-studio-code` | VS Code editor (user settings symlinked from `devtools/vscode/settings.json`) |
 | `google-chrome` | Web browser |
 | `firefox` | Web browser |
 | `slack` | Team messaging |
@@ -350,6 +365,17 @@ alias rm='nocorrect rm'   # Prevent zsh spell-checker from correcting rm
 **Note:** `claude-code` (formula) installs the `claude` CLI binary; `claude` (cask) installs
 the `Claude.app` desktop GUI app. They are unrelated Homebrew packages that happen to share
 a vendor. Do not conflate them.
+
+**Note on Node:** `nvm` is the sole source of Node versions. The brew `node` formula is
+intentionally **not** installed and is removed by `devtools/install.sh` if found. This is by
+design — `nvm install <ver>` manages all Node versions in `~/.nvm/versions/`.
+
+**Note on Rust:** `rustup` formula is **keg-only** (not symlinked to `/opt/homebrew/bin`).
+`devtools/install.sh` invokes `$(brew --prefix rustup)/bin/rustup install stable` to bootstrap
+the default toolchain into `~/.rustup/toolchains`. The shim binaries at
+`/opt/homebrew/opt/rustup/bin` (and `~/.cargo/bin` for non-brew installs) are added to PATH
+in `.zprofile`. Formula 1.29.0_2+ no longer ships `rustup-init`; use `rustup install stable`
+instead.
 
 ---
 
@@ -375,7 +401,46 @@ End-to-end flow:
 
 ---
 
-## 11. `.gitignore`
+## 11. Development Toolchains
+
+End-to-end flow:
+
+1. `devtools/install.sh` is invoked by `install.sh` (both `fresh_install` and `update`).
+2. It installs the manager tool for each language:
+   - **VSCode** — cask `visual-studio-code` + symlinked `settings.json` into the VSCode User dir.
+   - **Node** — `brew install nvm`; **removes** any existing brew `node` formula so nvm owns Node; installs a default LTS.
+   - **Ruby** — `rvm` via its official `curl -sSL https://get.rvm.io | bash -s stable` installer (same trust pattern as the Homebrew and Oh My Zsh bootstraps in `install.sh`).
+   - **Python** — `brew install python@3.14` (`python3`, `pip3`), `uv` (fast pip/replacement), `pipx` (isolated CLI tools).
+   - **Rust** — `brew install rustup` (keg-only), then `rustup install stable --profile default --no-self-update`.
+3. Only the **manager** is installed; specific language versions are user-driven
+   (`nvm install <ver>`, `rvm install <ver>`, `uv python install <ver>`,
+   `rustup toolchain install <ver>`).
+
+### Files
+
+| File | Role |
+|---|---|
+| `devtools/install.sh` | Bootstrap: installs VSCode, Node/nvm, Ruby/rvm, Python/uv/pipx, Rust/rustup and symlinks VSCode user settings |
+| `devtools/vscode/settings.json` | Managed VSCode user settings — symlinked into `~/Library/Application Support/Code/User/settings.json` (backed up if pre-existing) |
+
+### Shell configuration rules — IMPORTANT
+
+- **Never put `nvm` / `rvm` source statements in `dotfiles/.zshenv`.** `.zshenv` is sourced for
+  every shell including non-interactive ones; sourcing nvm/rvm adds 250ms+ to every invocation
+  (and runs on every `git` call from tools). They live in `dotfiles/.zshrc` instead, which is
+  only sourced for interactive shells.
+- **Source `rvm` AFTER `nvm`** in `.zshrc` so rvm's PATH adjustments (which prepend ruby gem
+  bins) win over nvm's. Sourcing order matters.
+- **`~/.cargo/bin` and `/opt/homebrew/opt/rustup/bin` are wired in `dotfiles/.zprofile`**.
+  Both are needed: brew's `rustup` formula is keg-only (its shims live at the second path)
+  while non-brew rustup installs populate `~/.cargo`. They must stay in `.zprofile` (login
+  shell PATH) because macOS `path_helper` rebuilds PATH on login and would otherwise drop them.
+- **`uv` and `pipx` require no shell init** — `uv` is a single binary on the brew PATH;
+  `pipx ensurepath` prepends `~/.local/bin`, already on PATH via `.zshenv`.
+
+---
+
+## 12. `.gitignore`
 
 ```
 docs/superpowers/
@@ -388,7 +453,7 @@ if you need to track it.
 
 ---
 
-## 12. Commit Conventions
+## 13. Commit Conventions
 
 Observed convention from `git log`:
 
@@ -403,7 +468,7 @@ Do not commit directly to `main` — the user explicitly asks for `git push`.
 
 ---
 
-## 13. Guardrails
+## 14. Guardrails
 
 **MUST NOT do the following without explicitly checking with the user first:**
 
@@ -432,11 +497,14 @@ Do not commit directly to `main` — the user explicitly asks for `git push`.
 
 8. **Do not introduce Python, Node, or Ruby dependency runners** (e.g. `pip install`,
    `npm install`, `gem install`) unless the user explicitly asks. This repo uses
-   Homebrew and shell scripts only.
+   Homebrew and shell scripts only. The `devtools/install.sh` orchestrator (Section 11)
+   was explicitly authorised by the user to install the **manager** tools (nvm, rvm, uv,
+   pipx, rustup); it does not invoke `pip install` / `npm install` / `gem install` itself.
+   Future additions to that surface still require explicit user authorisation.
 
 ---
 
-## 14. Verification & Testing
+## 15. Verification & Testing
 
 After any change to `install.sh`, `macos/apply-settings.sh`, `iterm2/apply-iterm.sh`, or
 `claude/install.sh`:
@@ -472,7 +540,7 @@ Do not copy logic from a helper into both orchestrators — extend the helper in
 
 ---
 
-## 15. Key Gotchas / Lessons Learned
+## 16. Key Gotchas / Lessons Learned
 
 1. **iTerm2 font must be CFString `"Name Size"`.** Dict and NSKeyedArchiver forms crash iTerm2 3.6.11.
 2. **zsh uses `#` for comments, not `"`.** `"` after a command in `.zshrc` causes parse errors.
@@ -491,10 +559,23 @@ Do not copy logic from a helper into both orchestrators — extend the helper in
     all apps to pick up the new values.
 12. **zplug occasionally returns non-zero from `zplug install`** — it re-clobbers completion
     files on some runs. `run_zplug_install` tolerates this by design (`d161613`).
+13. **`rustup` formula is keg-only** — `$(brew --prefix rustup)/bin/rustup` must be
+    invoked directly (not `rustup` on PATH). Formula 1.29.0_2+ no longer ships
+    `rustup-init`; use `rustup install stable` to bootstrap the default toolchain.
+    `~/.rustup/toolchains/` holds the actual toolchain, and rustup's shims live at
+    `/opt/homebrew/opt/rustup/bin` (wired in `.zprofile`). `~/.cargo/bin` is also wired
+    in `.zprofile` for non-brew rustup installs.
+14. **`nvm` must be the only Node source.** If brew's `node` formula coexists, PATH confusion
+    results. `devtools/install.sh` removes any brew `node` formula before installing nvm.
+15. **`nvm` / `rvm` source statements must live in `.zshrc`**, never `.zshenv` (sourced for
+    every shell incl. non-interactive; adds 250ms+ to every invocation including `git` calls
+    from other tools).
+16. **rvm is installed via `curl | bash` from get.rvm.io** — same trust pattern as Homebrew
+    and Oh My Zsh. RVM is the only tool in this repo not available via Homebrew.
 
 ---
 
-## 16. Development Workflow
+## 17. Development Workflow
 
 ```sh
 # Make changes to managed files

@@ -21,6 +21,7 @@ sh -c "$(curl -fsSL https://raw.githubusercontent.com/mcapanema/dotfiles/main/in
 | **Claude Code** | Anthropic's terminal-based AI coding assistant (`claude` CLI) |
 | **opencode** | opencode CLI |
 | **Desktop apps** | Google Chrome, Firefox, Slack, WhatsApp, Telegram, ChatGPT, Claude |
+| **Dev toolchains** | VSCode (managed settings), Node + nvm, Ruby + rvm, Python + uv + pipx, Rust + rustup |
 | **macOS settings** | Developer-friendly system defaults (keyboard, trackpad, security, Time Machine) |
 
 ---
@@ -38,14 +39,15 @@ The script will:
 1. Ensure Command Line Tools / git are available
 2. Install Homebrew if missing
 3. Install iTerm2, Neovim, zplug, chezmoi, Claude Code, opencode
-4. Install desktop apps: Google Chrome, Firefox, Slack, WhatsApp, Telegram, ChatGPT, Claude
-5. Import iTerm2 preferences from the versioned snapshot
-6. Bootstrap Oh My Zsh and zplug plugins (Pure prompt, syntax highlighting, autosuggestions)
-7. Symlink `vim` and `vi` → `nvim` in `~/.local/bin`
-8. Install NERDTree via vim-plug
-9. Apply all managed dotfiles via chezmoi
-10. Set zsh as the login shell
-11. Apply sensible macOS system defaults (keyboard repeat, trackpad tap-to-click, security, Time Machine)
+4. Install dev toolchains: VSCode, Node/nvm, Ruby/rvm, Python/uv/pipx, Rust/rustup
+5. Install desktop apps: Google Chrome, Firefox, Slack, WhatsApp, Telegram, ChatGPT, Claude
+6. Import iTerm2 preferences from the versioned snapshot
+7. Bootstrap Oh My Zsh and zplug plugins (Pure prompt, syntax highlighting, autosuggestions)
+8. Symlink `vim` and `vi` → `nvim` in `~/.local/bin`
+9. Install NERDTree via vim-plug
+10. Apply all managed dotfiles via chezmoi
+11. Set zsh as the login shell
+12. Apply sensible macOS system defaults (keyboard repeat, trackpad tap-to-click, security, Time Machine)
 
 ### Update
 
@@ -133,11 +135,14 @@ sh "$HOME/.dotfiles/macos/apply-settings.sh"
 │   ├── .zshrc                      # Interactive shell config
 │   ├── .zprofile                   # Login shell config
 │   └── config/nvim/init.vim        # Neovim config
-└── claude/                          # Claude Code integration
-    ├── install.sh                   # Claude Code installer
-    ├── statusline-command.sh       # Statusline renderer
-    ├── config/settings.json         # API settings
-    └── templates/.zshenv           # Claude chezmoi template
+├── claude/                          # Claude Code integration
+│   ├── install.sh                   # Claude Code installer
+│   ├── statusline-command.sh       # Statusline renderer
+│   ├── config/settings.json         # API settings
+│   └── templates/.zshenv           # Claude chezmoi template
+└── devtools/                        # Development toolchains installer
+    ├── install.sh                   # VSCode + Node/nvm + Ruby/rvm + Python/uv/pipx + Rust/rustup
+    └── vscode/settings.json        # Managed VSCode user settings (symlinked into ~/Library/Application Support/Code/User/)
 ```
 
 ---
