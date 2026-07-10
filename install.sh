@@ -430,6 +430,11 @@ fresh_install() {
     brew_install_if_missing "ChatGPT" chatgpt --cask
     brew_install_if_missing "Claude" claude --cask
 
+    # AI assistant tools + mouse utility.
+    brew_install_if_missing "Codex CLI" codex --cask
+    brew_install_if_missing "Codex" codex-app --cask
+    brew_install_if_missing "Mos" mos --cask
+
     info "Applying dotfiles..."
     chezmoi apply --source "${DOTFILES_DIR}/${DOTFILES_SOURCE_SUBDIR}"
 
@@ -505,6 +510,11 @@ update() {
     brew_install_if_missing "Telegram" telegram --cask
     brew_install_if_missing "ChatGPT" chatgpt --cask
     brew_install_if_missing "Claude" claude --cask
+
+    # AI assistant tools + mouse utility.
+    brew_install_if_missing "Codex CLI" codex --cask
+    brew_install_if_missing "Codex" codex-app --cask
+    brew_install_if_missing "Mos" mos --cask
 
     install_claude_config true
 

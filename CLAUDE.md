@@ -168,6 +168,9 @@ brew_install_if_missing WhatsApp (whatsapp --cask)
 brew_install_if_missing Telegram (telegram --cask)
 brew_install_if_missing ChatGPT (chatgpt --cask)
 brew_install_if_missing Claude (claude --cask)
+brew_install_if_missing Codex CLI (codex --cask)
+brew_install_if_missing Codex (codex-app --cask)
+brew_install_if_missing Mos (mos --cask)
 chezmoi apply --source "$DOTFILES/dotfiles"
 copy_dotfile (dotfiles/.zshrc → $HOME/.zshrc)
 run_zplug_install
@@ -361,10 +364,17 @@ alias rm='nocorrect rm'   # Prevent zsh spell-checker from correcting rm
 | `telegram` | Messaging |
 | `chatgpt` | OpenAI ChatGPT desktop app |
 | `claude` | Anthropic Claude desktop app (GUI) — **distinct from the `claude-code` CLI formula** |
+| `codex` | OpenAI Codex CLI (terminal coding agent, `codex` binary) — **distinct from the `codex-app` cask** |
+| `codex-app` | OpenAI Codex desktop app (GUI) for managing coding agents |
+| `mos` | Smooth scrolling + independent scroll direction per device |
 
 **Note:** `claude-code` (formula) installs the `claude` CLI binary; `claude` (cask) installs
 the `Claude.app` desktop GUI app. They are unrelated Homebrew packages that happen to share
 a vendor. Do not conflate them.
+
+**Note:** `codex` (cask) installs the `codex` CLI binary; `codex-app` (cask) installs
+the `Codex.app` desktop GUI app for managing coding agents. They are unrelated Homebrew
+packages that happen to share a vendor. Do not conflate them.
 
 **Note on Node:** `nvm` is the sole source of Node versions. The brew `node` formula is
 intentionally **not** installed and is removed by `devtools/install.sh` if found. This is by
