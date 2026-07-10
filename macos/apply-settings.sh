@@ -70,6 +70,22 @@ defaults write com.apple.desktopservices DSDontWriteNetworkStores -bool true
 info "Preventing Time Machine from prompting to use new drives as backup..."
 defaults write com.apple.TimeMachine DoNotOfferNewDisksForBackup -bool true
 
+# ------------------------- Dock -------------------------
+
+info "Setting Dock tile size to 35 and enabling magnification (largesize 45)..."
+defaults write com.apple.dock tilesize -int 35
+defaults write com.apple.dock magnification -bool true
+defaults write com.apple.dock largesize -int 45
+
+info "Minimizing windows into their application icon..."
+defaults write com.apple.dock minimize-to-application -bool true
+
+info "Hiding recent apps from the Dock..."
+defaults write com.apple.dock show-recents -bool false
+
+info "Restarting Dock to apply changes..."
+killall Dock 2>/dev/null || true
+
 # ------------------------- Reload preferences -------------------------
 # cfprefsd caches preferences on behalf of every running process. `defaults
 # write` updates the on-disk plist, but the user's cfprefsd CONTINUES to
