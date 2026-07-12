@@ -312,7 +312,13 @@ The `.plist.export` file is committed to the repo. It contains personal keys
 ## 6. Neovim Configuration
 
 - **init.vim location:** `~/.config/nvim/init.vim` (managed via chezmoi at
-  `dotfiles/config/nvim/init.vim`; **force-copied** to `$HOME/.config/nvim` on fresh install).
+  `dotfiles/config/nvim/init.vim`; **also force-copied** to `$HOME/.config/nvim`
+  by `lib/nvim.sh`'s `sync_neovim_config` before `chezmoi apply` runs). The
+  redundancy is intentional: `install_nvim_plugins` runs `:PlugInstall` against
+  `init.vim` and needs the file on disk before `chezmoi apply` has materialized
+  it. Removing `sync_neovim_config` is safe only if `chezmoi apply` is
+  simultaneously reordered to precede `install_nvim_plugins` in both
+  `fresh_install` and `update`.
 - **Plugin manager:** vim-plug (installed by `install.sh`, NOT in `init.vim`).
   Reason: `system()` in vim script doesn't expand `~`; download is done in shell with curl.
 - **Plugins:** NERDTree via `Plug 'preservim/nerdtree'`. `\n` toggles NERDTree.

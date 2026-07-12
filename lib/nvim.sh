@@ -5,6 +5,19 @@
 #
 # Functions are idempotent so they're safe to call from both fresh_install
 # and update.
+#
+# CHEZMOI RELATIONSHIP
+#   dotfiles/config/nvim/init.vim IS a chezmoi-managed file (chezmoi managed
+#   lists it; `chezmoi apply` materialises it to ~/.config/nvim/init.vim).
+#   sync_neovim_config below also force-copies the same file BEFORE
+#   `chezmoi apply` runs in fresh_install/update.  The redundancy is
+#   intentional: install_nvim_plugins (nvim --headless +PlugInstall) needs
+#   init.vim present on disk before chezmoi apply has run.  Reordering so
+#   `chezmoi apply` precedes `install_nvim_plugins` would eliminate the
+#   duplication but make the orchestrator flow harder to follow; the
+#   harmless redundant cp is kept as a safety net.  Do not remove
+#   sync_neovim_config without also reordering the orchestrators — see
+#   CLAUDE.md §6 for the full rationale.
 
 # vim_plug_installed — true if the vim-plug autoload script is present.
 vim_plug_installed() {
@@ -13,6 +26,11 @@ vim_plug_installed() {
 
 # sync_neovim_config — copies the managed init.vim into ~/.config/nvim.
 # No-op if the source file is missing from the repo.
+#
+# Redundant with `chezmoi apply` (the file is chezmoi-managed) but kept
+# as an intentional pre-apply copy because install_nvim_plugins needs
+# init.vim on disk to run :PlugInstall against, and that step currently
+# executes before `chezmoi apply`.  See file header for the full story.
 sync_neovim_config() {
     if [ ! -f "${DOTFILES_DIR}/${DOTFILES_SOURCE_SUBDIR}/config/nvim/init.vim" ]; then
         return 0
