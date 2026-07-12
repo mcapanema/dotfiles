@@ -21,8 +21,9 @@ set -o pipefail
 
 DOTFILES="${DOTFILES:-$HOME/.dotfiles}"
 
-info()  { echo "==> $*" ; }
-warn()  { echo " WARNING: $*" ; }
+# Source shared primitives (info, warn, ...) from the lib/ directory.
+# shellcheck source=../lib/common.sh
+. "$(dirname "$0")/../lib/common.sh"
 
 # ------------------------- Keyboard -------------------------
 

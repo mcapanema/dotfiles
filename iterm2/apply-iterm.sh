@@ -15,7 +15,9 @@ DOTFILES="${DOTFILES:-$HOME/.dotfiles}"
 PLIST_FILE="$DOTFILES/iterm2/com.googlecode.iterm2.plist.export"
 DOMAIN="com.googlecode.iterm2"
 
-info()  { echo "==> $*" ; }
+# Source shared primitives (info, ...) from the lib/ directory.
+# shellcheck source=../lib/common.sh
+. "$(dirname "$0")/../lib/common.sh"
 
 if [ ! -f "$PLIST_FILE" ]; then
     echo "ERROR: iTerm2 pref snapshot not found at $PLIST_FILE" >&2

@@ -21,40 +21,20 @@ set -o pipefail
 
 DEVTOOLS_DIR="$(dirname "$0")"
 TOLERANCE="${1:-warn}"
+# shellcheck disable=SC2034  # BACKUP_TS is read by symlink_into_place in lib/common.sh at runtime
 BACKUP_TS="$(date +%Y%m%d%H%M%S)-$$"
 
-info()  { echo "==> $*" ; }
-warn()  { echo " WARNING: $*" ; }
-has()   { command -v "$1" >/dev/null 2>&1; }
+# Source shared primitives (info, warn, has, brew_installed,
+# symlink_into_place, tolerant_fail, ...) from the lib/ directory.
+# shellcheck source=../lib/common.sh
+. "$DEVTOOLS_DIR/../lib/common.sh"
 
-# brew_installed — true if a Homebrew formula or cask is installed.
-# Defined inside main() to avoid shadowing a homonym in the parent script
-# (this file is sourced via `sh`, never via `.`, so scoping is safe).
-brew_installed() { has brew && brew list "$1" >/dev/null 2>&1; }
-
-# soft_fail — respect the tolerance contract. Returns 0 so `set -e` doesn't
-# abort the parent script; surfaces a warning when tolerance is "warn".
+# soft_fail — preserve this script's existing `soft_fail "$msg"` call sites
+# by wrapping tolerant_fail with the script's TOLERANCE.  lib/common.sh
+# owns a same-named always-warn soft_fail; this local definition intentionally
+# shadows it.
 soft_fail() {
-    [ "$TOLERANCE" = "true" ] || warn "$1"
-    return 0
-}
-
-# symlink_into_place — same backup-and-symlink pattern as claude/install.sh.
-#   $1: source path (in the repo)
-#   $2: target path (in $HOME)
-symlink_into_place() {
-    _src="$1"; _dst="$2"
-    if [ -L "$_dst" ] && [ "$(readlink "$_dst")" = "$_src" ]; then
-        info "$_dst already symlinked to $_src"
-        return 0
-    fi
-    if [ -e "$_dst" ] || [ -L "$_dst" ]; then
-        _backup="${_dst}.backup-${BACKUP_TS}"
-        info "Moving existing $_dst -> $_backup"
-        mv "$_dst" "$_backup"
-    fi
-    info "Creating symlink: $_dst -> $_src"
-    ln -s "$_src" "$_dst"
+    tolerant_fail "$TOLERANCE" "$1"
 }
 
 # ---------------------------- VSCode ----------------------------

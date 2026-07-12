@@ -22,6 +22,7 @@ sh -c "$(curl -fsSL https://raw.githubusercontent.com/mcapanema/dotfiles/main/in
 | **opencode** | opencode CLI |
 | **Desktop apps** | Google Chrome, Firefox, Slack, WhatsApp, Telegram, ChatGPT, Claude, Codex, Codex CLI, Mos |
 | **Dev toolchains** | VSCode (managed settings), Node + nvm, Ruby + rvm, Python + uv + pipx, Rust + rustup |
+| **AI auxiliary tools** | rtk (token compression), engram (persistent memory), graphify (knowledge graph), headroom (context compression). Binaries installed by `install.sh`; agent integration via `setup-ai-tools.sh` |
 | **macOS settings** | Developer-friendly system defaults (keyboard, trackpad, security, Time Machine) |
 
 ---
@@ -53,6 +54,27 @@ The script will:
 
 Re-run the same command on an already-configured machine. It will pull the latest
 changes, re-apply dotfiles, re-install plugins, and re-import iTerm2 preferences.
+
+---
+
+## AI auxiliary tools
+
+`install.sh` installs the binaries for four AI auxiliary tools:
+
+| Tool | Command | Purpose | Installed via |
+|---|---|---|---|
+| **rtk** | `rtk` | Compresses CLI command outputs before they reach the LLM (60–90% token savings) | `brew install rtk` |
+| **engram** | `engram` | Persistent memory for AI coding agents (SQLite + FTS5, MCP server) | `brew tap gentleman-programming/tap && brew install gentleman-programming/tap/engram` |
+| **graphify** | `graphify` | Maps a project into a queryable knowledge graph | `uv tool install graphifyy` |
+| **headroom** | `headroom` | Compresses tool outputs / logs / files before they reach the LLM | `uv tool install "headroom-ai[all]"` |
+
+To wire rtk / engram / graphify into Claude Code and opencode (hooks, MCP config, skills), run **after** `install.sh` finishes:
+
+```shell
+sh "$HOME/.dotfiles/setup-ai-tools.sh"
+```
+
+`headroom` is intentionally not configured by the script — run `headroom wrap claude` manually per session when you want live compression.
 
 ---
 
@@ -123,6 +145,7 @@ sh "$HOME/.dotfiles/macos/apply-settings.sh"
 ```
 .dotfiles/
 ├── install.sh                       # Bootstrap / update script
+├── setup-ai-tools.sh                # Configure rtk/engram/graphify for Claude Code + opencode (run manually after install.sh)
 ├── chezmoi.toml                     # chezmoi config
 ├── iterm2/
 │   ├── apply-iterm.sh               # Import preferences snapshot

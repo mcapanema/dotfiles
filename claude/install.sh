@@ -10,36 +10,12 @@ CLAUDE_CONFIG_SOURCE="$CLAUDE_DIR/config"
 CLAUDE_STATUSLINE_SOURCE="$CLAUDE_DIR/statusline-command.sh"
 CLAUDE_CONFIG_TARGET="$HOME/.config/claude-code"
 CLAUDE_TARGET="$HOME/.claude"
+# shellcheck disable=SC2034  # BACKUP_TS is read by symlink_into_place in lib/common.sh at runtime
 BACKUP_TS="$(date +%Y%m%d%H%M%S)-$$"
 
-info()  { echo "==> $*" ; }
-warn()  { echo " WARNING: $*" ; }
-
-has() { command -v "$1" >/dev/null 2>&1; }
-
-# Symlink a file/dir into place. If the target exists:
-#   - if it's already the right symlink, nothing to do
-#   - if it's a different symlink or a regular file/dir, back it up
-#     with a unique backup suffix, then create the new symlink
-symlink_into_place() {
-    source_path="$1"
-    target_path="$2"
-
-    # Already pointing at the right source — nothing to do.
-    if [ -L "$target_path" ] && [ "$(readlink "$target_path")" = "$source_path" ]; then
-        info "$target_path already symlinked to $source_path"
-        return 0
-    fi
-
-    if [ -e "$target_path" ] || [ -L "$target_path" ]; then
-        backup="${target_path}.backup-${BACKUP_TS}"
-        info "Moving existing $target_path -> $backup"
-        mv "$target_path" "$backup"
-    fi
-
-    info "Creating symlink: $target_path -> $source_path"
-    ln -s "$source_path" "$target_path"
-}
+# Source shared primitives (info, warn, symlink_into_place, ...) from lib/.
+# shellcheck source=../lib/common.sh
+. "$CLAUDE_DIR/../lib/common.sh"
 
 install_configs() {
     info "Setting up Claude Code configuration..."

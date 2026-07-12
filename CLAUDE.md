@@ -28,6 +28,7 @@ fresh-install and update paths.
 ├── CLAUDE.md                    # THIS FILE — agent harness
 ├── README.md                    # Human-facing public intro; keep accurate
 ├── install.sh                   # Bootstrap / update orchestrator
+├── setup-ai-tools.sh            # Configure rtk/engram/graphify for Claude Code + opencode (manual run after install.sh)
 ├── chezmoi.toml                 # chezmoi config (source=repo root, files=dotfiles/)
 ├── .gitignore                   # Ignores docs/superpowers/ and .worktrees/
 ├── iterm2/
@@ -47,22 +48,30 @@ fresh-install and update paths.
 │   ├── config/settings.json     # API settings
 │   ├── templates/.zshenv       # chezmoi template for API config (conditional source in .zshenv)
 │   └── test/                    # Internal test fixtures (do not ship)
-└── devtools/                    # Development toolchains installer
-    ├── install.sh               # VSCode + Node/nvm + Ruby/rvm + Python/uv/pipx + Rust/rustup
-    └── vscode/settings.json    # Managed VSCode user settings (symlinked into ~/Library/Application Support/Code/User/)
+├── devtools/                    # Development toolchains installer
+│   ├── install.sh               # VSCode + Node/nvm + Ruby/rvm + Python/uv/pipx + Rust/rustup
+│   └── vscode/settings.json    # Managed VSCode user settings (symlinked into ~/Library/Application Support/Code/User/)
+└── lib/                         # Shared shell libraries (sourced by install.sh and child scripts)
+    ├── common.sh                # Logging/presence primitives + symlink_into_place + soft_fail/tolerant_fail + install_uv_tool (sourced by all 6 scripts)
+    ├── bootstrap.sh             # ensure_brew_on_path/install_homebrew/ensure_brew_git/ensure_build_tools/ensure_git (canonical source; install.sh keeps an inline copy for the curl-bootstrap case)
+    ├── brew-packages.sh         # Per-group brew-install functions (install_core_casks/install_core_formulas/install_browsers/.../install_all_desktop_apps/install_ai_aux_tools)
+    └── nvim.sh                  # Neovim setup helpers (vim_plug_installed/sync_neovim_config/sync_nvim_symlinks/ensure_vim_plug/install_nvim_plugins)
 ```
 
 ### Edit freely
 
 `dotfiles/.zshenv`, `dotfiles/.zshrc`, `dotfiles/.zprofile`, `dotfiles/config/nvim/init.vim`,
 `macos/apply-settings.sh`, `iterm2/apply-iterm.sh`, `claude/install.sh`, `claude/statusline-command.sh`,
-`claude/config/settings.json`, `devtools/install.sh`, `devtools/vscode/settings.json`, `CLAUDE.md`, `README.md`
+`claude/config/settings.json`, `devtools/install.sh`, `devtools/vscode/settings.json`, `setup-ai-tools.sh`,
+`lib/common.sh`, `lib/brew-packages.sh`, `lib/nvim.sh`, `CLAUDE.md`, `README.md`
 
 ### Edit with care — verify after changing
 
 | File | Required check |
 |---|---|
-| `install.sh` | Trace through both `fresh_install` and `update` paths; run shellcheck if available |
+| `install.sh` | Trace through both `fresh_install` and `update` paths; run shellcheck if available. **Also audit `lib/bootstrap.sh`**: install.sh keeps an inline copy of those functions for the curl-bootstrap case — keep the two copies in sync |
+| `lib/bootstrap.sh` | Run shellcheck; trace through both the inline `install.sh` copy and the lib copy (they must stay in sync) |
+| `setup-ai-tools.sh` | Run shellcheck |
 | `iterm2/com.googlecode.iterm2.plist.export` | Run `plutil -lint` before committing |
 | `chezmoi.toml` | `diff` before `chezmoi apply` |
 | `claude/templates/.zshenv` | Must be valid zsh syntax when sourced; test with `zsh -n` |
@@ -77,7 +86,10 @@ fresh-install and update paths.
 ### Pre-flight: brew + brew-managed git
 
 `brew` and a Homebrew-managed `git` are **hard dependencies** of this repo — they are installed
-*before* the repo is cloned, because the clone itself needs `git`.
+*before* the repo is cloned, because the clone itself needs `git`. The bootstrap subsystem
+(`ensure_brew_on_path` / `install_homebrew` / `ensure_brew_git` / `ensure_build_tools` / `ensure_git`)
+lives in `lib/bootstrap.sh`, but `install.sh` keeps an **inline copy** of those same functions because
+the curl-bootstrap path runs before `lib/` exists on disk. The two copies must stay in sync.
 
 ```
 main()
@@ -110,20 +122,26 @@ If brew is somehow unreachable, `ensure_build_tools()` falls back to CLT via
 Each accepts a `tolerance` arg: `"warn"` surfaces failures (fresh-install contract);
 `"true"` swallows failures silently (update contract).
 
-| Helper | What it does |
-|---|---|
-| `apply_macos_prefs` | Runs `macos/apply-settings.sh` idempotently |
-| `launch_iterm_once` | Opens iTerm2 once so its defaults domain is registered before plist import; no-op if already running or not installed |
-| `apply_iterm_prefs` | Runs `iterm2/apply-iterm.sh` (stops iTerm, plutil -lint, defaults import, restart) |
-| `install_omz` | Shallow-clones Oh My Zsh to `$HOME/.oh-my-zsh` if absent |
-| `sync_neovim_config` | Copies `dotfiles/config/nvim/init.vim` → `~/.config/nvim/init.vim` |
-| `sync_nvim_symlinks` | Creates `~/.local/bin/{vim,vi}` → `nvim`; `~/.local/bin` is prepended to PATH via `.zshenv` |
-| `ensure_vim_plug` | Downloads `plug.vim` into `$HOME/.local/share/nvim/site/autoload` if absent |
-| `install_nvim_plugins` | Runs `nvim --headless +PlugInstall +qall`; tolerates errors |
-| `install_claude_config` | Runs `claude/install.sh`; tolerance controls whether errors are surfaced |
-| `install_devtools` | Runs `devtools/install.sh` (VSCode + Node/nvm + Ruby/rvm + Python/uv/pipx + Rust/rustup); tolerance controls whether errors are surfaced |
-| `copy_dotfile` | Force-copies `dotfiles/.zshrc` → `$HOME/.zshrc` (see note below) |
-| `run_zplug_install` | Runs `zplug install` in a clean zsh session; tolerates non-zero exit by design |
+Some helpers live in `install.sh` directly; others have been factored out to `lib/`
+files (sourced by `install.sh`'s `main()` after the repo is cloned). The "Where" column
+shows the canonical location to edit.
+
+| Helper | Where | What it does |
+|---|---|---|
+| `apply_macos_prefs` | install.sh | Runs `macos/apply-settings.sh` idempotently |
+| `launch_iterm_once` | install.sh | Opens iTerm2 once so its defaults domain is registered before plist import; no-op if already running or not installed |
+| `apply_iterm_prefs` | install.sh | Runs `iterm2/apply-iterm.sh` (stops iTerm, plutil -lint, defaults import, restart) |
+| `install_omz` | install.sh | Shallow-clones Oh My Zsh to `$HOME/.oh-my-zsh` if absent |
+| `sync_neovim_config` | lib/nvim.sh | Copies `dotfiles/config/nvim/init.vim` → `~/.config/nvim/init.vim` |
+| `sync_nvim_symlinks` | lib/nvim.sh | Creates `~/.local/bin/{vim,vi}` → `nvim`; `~/.local/bin` is prepended to PATH via `.zshenv` |
+| `ensure_vim_plug` | lib/nvim.sh | Downloads `plug.vim` into `$HOME/.local/share/nvim/site/autoload` if absent |
+| `install_nvim_plugins` | lib/nvim.sh | Runs `nvim --headless +PlugInstall +qall`; tolerates errors |
+| `install_claude_config` | install.sh | Runs `claude/install.sh`; tolerance controls whether errors are surfaced |
+| `install_devtools` | install.sh | Runs `devtools/install.sh` (VSCode + Node/nvm + Ruby/rvm + Python/uv/pipx + Rust/rustup); tolerance controls whether errors are surfaced |
+| `install_ai_aux_tools` | lib/brew-packages.sh | Installs rtk + engram (brew 3rd-party tap) + graphify + headroom (uv tool). Tolerance-aware; must run AFTER `install_devtools` so uv is on PATH |
+| `install_uv_tool` | lib/common.sh (+ inline in install.sh) | Installs a CLI as a uv-managed global tool (`uv tool install <spec>`) if the command is not already on PATH. Backs the graphify/headroom installs. |
+| `copy_dotfile` | install.sh | Force-copies `dotfiles/.zshrc` → `$HOME/.zshrc` (see note below) |
+| `run_zplug_install` | install.sh | Runs `zplug install` in a clean zsh session; tolerates non-zero exit by design |
 
 **`.zshrc force-copy note:** `chezmoi apply` does not overwrite an existing file in `$HOME`.
 On fresh install `.zshrc` already exists from Oh My Zsh's bootstrap, so `install.sh`
@@ -139,56 +157,76 @@ brew_installed()   # true if a Homebrew formula or cask is installed
 All per-tool detection funnels through these two. Variable names prefixed with `_` are
 function-local throwaways (enforced by convention only — POSIX sh has no `local`).
 
+These two primitives plus the higher-level logging/symlink/tolerance helpers live in
+`lib/common.sh`, sourced by the five child scripts (`devtools/install.sh`,
+`claude/install.sh`, `setup-ai-tools.sh`, `macos/apply-settings.sh`,
+`iterm2/apply-iterm.sh`). `install.sh` keeps inline copies of the primitives it uses
+(`info`, `warn`, `fail`, `cmd_available`, `brew_installed`, `brew_install_if_missing`,
+`install_uv_tool`) because the curl-bootstrap path runs before `lib/` exists on disk;
+the lib copy is the canonical source for the child scripts, and `install.sh`'s inline
+copy is the canonical source for itself. Keep the two in sync when editing.
+
+### lib/brew-packages.sh — per-group brew install functions
+
+The 30+ `brew_install_if_missing` calls that back the desktop-app and CLI-tool list
+are factored into `lib/brew-packages.sh` to eliminate the duplication that previously
+existed between `fresh_install` and `update`. The functions are grouped per
+CLAUDE.md §9 (Browsers, Messaging, AI Assistants, Productivity, Menu Bar, Security,
+Dev Tools, CLI tools):
+
+| Function | Casks / formulas | Called by |
+|---|---|---|
+| `install_core_casks` | JetBrains Mono, iTerm2 | `fresh_install` only (update assumes they persist once installed) |
+| `install_core_formulas` | zplug, neovim, chezmoi, claude-code | both `fresh_install` and `update` (a formula may have been `brew uninstall`ed) |
+| `install_browsers` | Google Chrome, Firefox | both |
+| `install_messaging` | Slack, WhatsApp, Telegram | both |
+| `install_ai_assistants` | ChatGPT, Claude, Codex | both |
+| `install_productivity` | Mos, Alfred, Contexts, BetterTouchTool, Moom, AppCleaner | both |
+| `install_menu_bar` | iStat Menus, Bartender | both |
+| `install_security` | 1Password, NordVPN | both |
+| `install_dev_tools` | Docker Desktop | both |
+| `install_cli_tools` | opencode, Codex | both |
+| `install_ai_aux_tools(tolerance)` | rtk, engram, graphify, headroom | both (tolerance-aware) |
+| `install_all_desktop_apps` | Convenience wrapper = `install_browsers + install_messaging + ... + install_cli_tools` | both |
+
 ### Full install-order list (fresh_install)
 
 ```
 apply_macos_prefs
 install_homebrew
-brew_install_if_missing JetBrains Mono (font-jetbrains-mono --cask)
+install_core_casks
+  brew_install_if_missing JetBrains Mono (font-jetbrains-mono --cask)
+  brew_install_if_missing iTerm2 (iterm2 --cask)
 brew install git
-brew_install_if_missing iTerm2 (iterm2 --cask)
 install_omz
 launch_iterm_once
 apply_iterm_prefs
-brew_install_if_missing zplug
-brew_install_if_missing Neovim
+install_core_formulas
+  brew_install_if_missing zplug
+  brew_install_if_missing Neovim
+  brew_install_if_missing chezmoi
+  brew_install_if_missing claude-code
 sync_neovim_config
 sync_nvim_symlinks
 ensure_vim_plug
 install_nvim_plugins
-brew_install_if_missing chezmoi
-brew_install_if_missing claude-code
 install_claude_config
 install_devtools
-# Desktop apps — Browsers
-brew_install_if_missing Google Chrome (google-chrome --cask)
-brew_install_if_missing Firefox (firefox --cask)
-# Desktop apps — Communication & Messaging
-brew_install_if_missing Slack (slack --cask)
-brew_install_if_missing WhatsApp (whatsapp --cask)
-brew_install_if_missing Telegram (telegram --cask)
-# Desktop apps — AI Assistants
-brew_install_if_missing ChatGPT (chatgpt --cask)
-brew_install_if_missing Claude (claude --cask)
-brew_install_if_missing Codex (codex-app --cask)
-# Desktop apps — Productivity & Utilities
-brew_install_if_missing Mos (mos --cask)
-brew_install_if_missing Alfred (alfred --cask)
-brew_install_if_missing Contexts (contexts --cask)
-brew_install_if_missing BetterTouchTool (bettertouchtool --cask)
-brew_install_if_missing Moom (moom --cask)
-brew_install_if_missing AppCleaner (appcleaner --cask)
-# Desktop apps — Menu Bar & System Monitoring
-brew_install_if_missing iStat Menus (istat-menus --cask)
-brew_install_if_missing Bartender (bartender --cask)
-# Desktop apps — Security & Networking
-brew_install_if_missing 1Password (1password --cask)
-brew_install_if_missing NordVPN (nordvpn --cask)
-# Desktop apps — Developer Tools
-brew_install_if_missing Docker Desktop (docker-desktop --cask)
-# CLI tools (not desktop GUI apps)
-brew_install_if_missing opencode CLI (opencode)
-brew_install_if_missing Codex CLI (codex --cask)
+install_ai_aux_tools warn
+  brew_install_if_missing rtk
+  brew tap gentleman-programming/tap
+  brew_install_if_missing engram (gentleman-programming/tap/engram)
+  install_uv_tool warn graphify (graphifyy)
+  install_uv_tool warn headroom (headroom-ai[all])
+install_all_desktop_apps
+  install_browsers        (Google Chrome, Firefox)
+  install_messaging       (Slack, WhatsApp, Telegram)
+  install_ai_assistants   (ChatGPT, Claude, Codex)
+  install_productivity    (Mos, Alfred, Contexts, BetterTouchTool, Moom, AppCleaner)
+  install_menu_bar        (iStat Menus, Bartender)
+  install_security        (1Password, NordVPN)
+  install_dev_tools       (Docker Desktop)
+  install_cli_tools       (opencode, Codex)
 chezmoi apply --source "$DOTFILES/dotfiles"
 copy_dotfile (dotfiles/.zshrc → $HOME/.zshrc)
 run_zplug_install
@@ -367,6 +405,8 @@ alias rm='nocorrect rm'   # Prevent zsh spell-checker from correcting rm
 | `uv` | Fast Python package installer/resolver (alternative to pip/virtualenv); also manages Python versions |
 | `pipx` | Run global CLI Python tools in isolated envs (e.g. `pipx install black`) |
 | `rustup` | Rust toolchain installer (keg-only — invoke via `$(brew --prefix rustup)/bin/rustup`); manages `rustc`/`cargo`/`clippy`. Formula 1.29.0_2+ no longer ships `rustup-init` — use `rustup install stable` to bootstrap. |
+| `rtk` | CLI proxy that compresses command outputs before they reach the LLM (60–90% token savings). First-party formula at `formulae.brew.sh/formula/rtk`; ships a prebuilt Rust binary, no Rust toolchain needed at install time. |
+| `engram` (via `gentleman-programming/tap/engram`) | Persistent memory for AI coding agents (SQLite + FTS5, MCP server). Third-party tap — `install.sh` runs `brew tap gentleman-programming/tap` before `brew install`. Ships a Go binary with SQLite compiled in, no runtime dependencies. |
 
 ### Casks
 
@@ -455,6 +495,12 @@ the default toolchain into `~/.rustup/toolchains`. The shim binaries at
 in `.zprofile`. Formula 1.29.0_2+ no longer ships `rustup-init`; use `rustup install stable`
 instead.
 
+**Note on rtk:** `rtk` is a first-party Homebrew formula (`formulae.brew.sh/formula/rtk`). It ships as a single Rust binary; `brew install rtk` includes the prebuilt binary — no Rust toolchain required at install time.
+
+**Note on engram:** `engram` lives in a third-party tap (`gentleman-programming/tap/engram`). `install.sh` runs `brew tap gentleman-programming/tap` before `brew install gentleman-programming/tap/engram`. It ships as a single Go binary with SQLite + FTS5 compiled in — no Go toolchain or runtime dependencies required.
+
+**Note on AI auxiliary tools (uv-managed):** `graphify` and `headroom` are installed via `uv tool install` (`graphifyy`; `headroom-ai[all]`) — NOT via Homebrew. `uv tool install` creates an isolated virtualenv per tool and symlinks the CLI into `~/.local/bin` (on PATH via `.zshenv`). This is **compliant with guardrail #8**: it installs a standalone manager-managed CLI (same pattern as the devtools orchestrator installing `uv` / `pipx`), NOT a `pip install` / `npm install` / `gem install` of a library into a project or system interpreter. Binaries land in `~/.local/bin`, not in any Python environment.
+
 ---
 
 ## 10. Claude Code / opencode Integration
@@ -476,6 +522,42 @@ End-to-end flow:
 | `claude/statusline-command.sh` | Renders the Claude Code statusline prompt |
 | `claude/config/settings.json` | Claude Code API settings |
 | `claude/templates/.zshenv` | chezmoi template for API config; conditional source in `dotfiles/.zshenv` |
+
+### 10.1 AI auxiliary tools (rtk, engram, graphify, headroom)
+
+Binaries are installed by `install.sh` (both `fresh_install` and `update`):
+- `rtk` — brew formula
+- `engram` — brew 3rd-party tap (`gentleman-programming/tap/engram`)
+- `graphify` — uv-managed (`uv tool install graphifyy`)
+- `headroom` — uv-managed (`uv tool install "headroom-ai[all]"`)
+
+**Agent integration (hooks / MCP config / skills) is NOT run by `install.sh`** — it's a distinct, manual step via `setup-ai-tools.sh`:
+
+```sh
+sh "$HOME/.dotfiles/setup-ai-tools.sh"
+```
+
+The script configures rtk, engram, and graphify for **both** Claude Code and opencode:
+
+| Tool | Claude Code | opencode |
+|---|---|---|
+| rtk | `rtk init -g --auto-patch` | `rtk init -g --opencode --auto-patch` |
+| engram | `claude plugin marketplace add Gentleman-Programming/engram && claude plugin install engram` | `engram setup opencode` |
+| graphify | `graphify install` | `graphify install --platform opencode` |
+
+`headroom` is **intentionally excluded** from `setup-ai-tools.sh` — `headroom wrap claude` launches a live wrapped session (interactive, runtime), not durable config. Run it manually per session when you want live compression:
+
+```sh
+headroom wrap claude    # starts proxy + MCP + launches wrapped Claude Code
+headroom unwrap claude  # undo durable agent config writes
+```
+
+After running `setup-ai-tools.sh`, **restart both Claude Code and opencode** so rtk's PreToolUse hook, engram's MCP subprocess, and graphify's skill all load fresh.
+
+**Undo:**
+- `rtk init -g --uninstall`
+- `claude plugin uninstall engram`
+- `graphify uninstall`
 
 ---
 
@@ -584,13 +666,15 @@ Do not commit directly to `main` — the user explicitly asks for `git push`.
 
 ## 15. Verification & Testing
 
-After any change to `install.sh`, `macos/apply-settings.sh`, `iterm2/apply-iterm.sh`, or
-`claude/install.sh`:
+After any change to `install.sh`, `macos/apply-settings.sh`, `iterm2/apply-iterm.sh`,
+`claude/install.sh`, `devtools/install.sh`, `setup-ai-tools.sh`, or any `lib/*.sh` file:
 
 ```sh
 # shellcheck (install shellcheck first if not present)
 brew_install_if_missing ShellCheck shellcheck
-shellcheck install.sh macos/apply-settings.sh iterm2/apply-iterm.sh claude/install.sh
+shellcheck install.sh lib/common.sh lib/bootstrap.sh lib/brew-packages.sh lib/nvim.sh \
+           macos/apply-settings.sh iterm2/apply-iterm.sh claude/install.sh \
+           devtools/install.sh setup-ai-tools.sh
 ```
 
 After any change to `iterm2/com.googlecode.iterm2.plist.export`:
@@ -614,7 +698,11 @@ zsh -n dotfiles/.zshrc
 
 When editing `install.sh`, trace through both `fresh_install` and `update` mentally before
 committing. All shared helpers must back at least two call sites (`f771884` convention).
-Do not copy logic from a helper into both orchestrators — extend the helper instead.
+Do not copy logic from a helper into both orchestrators — extend the helper instead. The
+per-group brew-install functions in `lib/brew-packages.sh` are the canonical example: add
+new casks/formulas there rather than duplicating install calls across the two orchestrators.
+When editing the inline bootstrap primitives at the top of `install.sh`, **also update
+`lib/bootstrap.sh`** — the two copies must stay in sync (see §3 Pre-flight).
 
 ---
 
@@ -650,6 +738,18 @@ Do not copy logic from a helper into both orchestrators — extend the helper in
     from other tools).
 16. **rvm is installed via `curl | bash` from get.rvm.io** — same trust pattern as Homebrew
     and Oh My Zsh. RVM is the only tool in this repo not available via Homebrew.
+
+17. **`uv tool install <pkg>` is not `pip install`.** It creates an isolated venv per CLI tool
+    and symlinks the binary into `~/.local/bin` (already on PATH via `.zshenv`). This is
+    compliant with guardrail #8 — it installs a manager-managed standalone CLI, not a
+    project / system-interpreter library. `graphifyy` (note the double-y; the CLI is `graphify`)
+    and `headroom-ai[all]` are installed this way.
+
+18. **`engram` lives in a third-party brew tap.** `brew install gentleman-programming/tap/engram`
+    does NOT auto-tap — `install.sh` runs `brew tap gentleman-programming/tap` explicitly before
+    the `brew install`. The `brew_install_if_missing` helper's `brew install "$@" "$_pkg"` call
+    passes the fully-qualified `tap/package` name as the package argument, but the tap must
+    already exist or the install fails.
 
 ---
 

@@ -17,23 +17,35 @@
 #
 # Safe to re-run; the install vs. update path is determined by whether
 # $HOME/.dotfiles-installed exists.
+#
+# LIBRARY LAYOUT
+#   install.sh inlines a minimal set of bootstrap primitives at the top
+#   because $DOTFILES_DIR/lib/ does not yet exist when this script runs
+#   via the curl-bootstrap command (we haven't cloned the repo yet).
+#   Once the repo is cloned install.sh sources the canonical versions
+#   from lib/common.sh, lib/bootstrap.sh, lib/brew-packages.sh, and
+#   lib/nvim.sh — those sources redefine the same functions and the
+#   maintainer-owned versions win.  Keep the inline bootstrap copy in
+#   sync with lib/bootstrap.sh when editing either file.
 
-set -euo pipefail
+set -eu
+set -o pipefail
 
 # ---------------------------- Constants ----------------------------
 REPO_URL="https://github.com/mcapanema/dotfiles.git"
-BREW_INSTALL_URL="https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh"
 MARKER_FILE="$HOME/.dotfiles-installed"
 DOTFILES_DIR="$HOME/.dotfiles"
 DOTFILES_SOURCE_SUBDIR="dotfiles"
 
-# ---------------------------- Helpers ----------------------------
-# Two primitives: command presence (cmd_available) and brew-pkg presence
-# (brew_installed). All higher-level predicates derive from these.
-
-# Variable names prefixed with `_` are function-local throwaways; the
-# convention is enforced by convention only since POSIX sh lacks `local`.
-
+# ---------------------------- Bootstrap-phase primitives ----------------------------
+# Inline copies of lib/common.sh's logging/presence primitives and selected
+# brew-pkg helpers, plus lib/bootstrap.sh's bootstrap subsystem.  These run
+# BEFORE the repo is cloned (when lib/ does not yet exist on disk).  The
+# canonical lib/common.sh version exists for the five child scripts
+# (devtools/install.sh, claude/install.sh, setup-ai-tools.sh,
+# macos/apply-settings.sh, iterm2/apply-iterm.sh) so they share one
+# definition; install.sh owns its own inline copy because it must run
+# before lib/ is available.  Keep the two copies in sync.
 info()  { echo "==> $*" ; }
 warn()  { echo " WARNING: $*" ; }
 fail()  { echo "ERROR: $*" >&2; exit 1 ; }
@@ -58,8 +70,34 @@ brew_install_if_missing() {
     fi
 }
 
+# install_uv_tool — installs a CLI as a uv-managed global tool if the
+# command is not already on PATH.  Called from lib/brew-packages.sh's
+# install_ai_aux_tools, so it must be inline here (lib/common.sh is only
+# sourced by child scripts).  Keep in sync with lib/common.sh.
+#   $1: tolerance — "warn" surfaces failures, "true" swallows them.
+#   $2: human-readable name (for log lines, e.g. "graphify").
+#   $3: uv tool spec (e.g. "graphifyy", "headroom-ai[all]").
+#   $4: command name to check for idempotency (e.g. "graphify", "headroom").
+install_uv_tool() {
+    _tolerance="${1:-warn}"
+    _name="$2"; _spec="$3"; _cmd="$4"
+    if cmd_available "$_cmd"; then
+        info "$_name already installed, skipping."
+        return 0
+    fi
+    if ! cmd_available uv; then
+        [ "$_tolerance" = "warn" ] && warn "uv not found; skipping $_name."
+        return 0
+    fi
+    info "Installing $_name via uv..."
+    uv tool install "$_spec" \
+        || [ "$_tolerance" = "true" ] \
+        || warn "$_name install failed; run 'uv tool install \"$_spec\"' manually."
+}
+
+BREW_INSTALL_URL="https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh"
+
 # ensure_brew_on_path — re-sources brew's shellenv so `brew` resolves.
-# Used after a fresh brew install and at the top of every update run.
 ensure_brew_on_path() {
     if [ -x "/opt/homebrew/bin/brew" ]; then
         eval "$(/opt/homebrew/bin/brew shellenv)"
@@ -71,14 +109,7 @@ ensure_brew_on_path() {
     fi
 }
 
-# vim-plug for Neovim: installed when the autoload file is missing.
-vim_plug_installed() {
-    [ -f "$HOME/.local/share/nvim/site/autoload/plug.vim" ]
-}
-
 # install_homebrew — installs Homebrew if missing, then ensures it is on PATH.
-# Idempotent. Used both as a hard dependency of this repo (called before clone)
-# and inside fresh_install.
 install_homebrew() {
     if cmd_available brew; then
         ensure_brew_on_path
@@ -89,9 +120,7 @@ install_homebrew() {
     ensure_brew_on_path
 }
 
-# ensure_brew_git — guarantees a Homebrew-managed git binary is present and
-# resolvable. Treats brew as a hard dependency of this repo so a freshly
-# cloned machine does not depend on Apple's older CLT git.
+# ensure_brew_git — guarantees a Homebrew-managed git binary is present.
 ensure_brew_git() {
     install_homebrew
     _brew_prefix="$(brew --prefix)"
@@ -104,59 +133,22 @@ ensure_brew_git() {
     brew install git
 }
 
-# ensure_git — installs brew + brew-managed git as dependencies before any
-# `git clone` of this repo. If brew is somehow unreachable, falls back to
-# the CLT-based path via ensure_build_tools.
-ensure_git() {
-    ensure_brew_git
-    # Final sanity: `git` must actually resolve on PATH at this point.
-    if ! command -v git >/dev/null 2>&1; then
-        warn "brew-supplied git not on PATH — falling back to CLT."
-        ensure_build_tools
-    fi
-    command -v git >/dev/null 2>&1 || \
-        fail "git is not available; install Xcode CLT or Homebrew manually."
-}
-
-# ---------------------------- Pre-flight: build tools ----------------------------
-# On a completely fresh macOS install git is only available after the
-# Command Line Tools package is installed.  CLT ships a git binary at
-# /Library/Developer/CommandLineTools/usr/bin/git that is on PATH once
-# xcode-select has been run.  This function:
-#   1. Checks whether git already resolves (fast path on a configured box).
-#   2. If not, tries to install CLT silently via softwareupdate(8)'s
-#      --agree-to-license flag (works on macOS 13+ without user interaction).
-#   3. Falls back to opening the standard GUI installer if step 2 fails.
-#      The script blocks until the user dismisses the dialog or a 3-minute
-#      timeout expires — this is the only interactive step that cannot be
-#      avoided on a completely fresh machine.
+# ensure_build_tools — installs CLT via softwareupdate (silent) or xcode-select
+# (GUI fallback), then polls for git to appear.
 ensure_build_tools() {
     if command -v git >/dev/null 2>&1; then
         info "git already available, skipping CLT setup."
         return 0
     fi
-
     info "git not found — ensuring Command Line Tools..."
-
-    # Attempt silent install (no GUI) via softwareupdate(8).
-    # --agree-to-license skips the licence prompt on macOS 13+.
-    # We try twice because the package label may or may not carry a
-    # version suffix (e.g. "Command Line Tools for Xcode" vs
-    # "Command Line Tools for Xcode 26.5").
     for _ in 1 2; do
         softwareupdate --install --agree-to-license -r \
             "Command Line Tools for Xcode" >/dev/null 2>&1 && break
         sleep 2
     done
-
-    # softwareupdate exits 0 even when there was nothing to install.
-    # Verify git is actually on PATH rather than trusting the exit code.
     if command -v git >/dev/null 2>&1; then
         info "CLT / git is now available."
     else
-        # Silent install didn't apply (no matching update).  Fall back to
-        # the standard GUI installer.  The script blocks here until the
-        # user dismisses the dialog or 3 minutes elapse.
         warn "Silent CLT install failed — opening GUI installer."
         warn "After installation finishes, dismiss the dialog."
         warn "This script will resume automatically."
@@ -164,8 +156,6 @@ ensure_build_tools() {
         warn "re-run this script after CLT is installed."
         xcode-select --install || true
     fi
-
-    # Poll for up to 3 minutes for git to appear after the GUI install.
     for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 \
              21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36; do
         sleep 5
@@ -174,15 +164,29 @@ ensure_build_tools() {
             return 0
         fi
     done
-
     fail "Command Line Tools did not become available after 3 minutes. " \
          "Install Xcode Command Line Tools manually and re-run this script."
 }
 
-# ---------------------------- Shared step helpers ----------------------------
+# ensure_git — installs brew + brew-managed git as dependencies before any
+# `git clone` of this repo.  Falls back to CLT if brew is unreachable.
+ensure_git() {
+    ensure_brew_git
+    if ! command -v git >/dev/null 2>&1; then
+        warn "brew-supplied git not on PATH — falling back to CLT."
+        ensure_build_tools
+    fi
+    command -v git >/dev/null 2>&1 || \
+        fail "git is not available; install Xcode CLT or Homebrew manually."
+}
+
+# ---------------------------- Install.sh-local step helpers ----------------------------
 # These helpers back both fresh_install and update so neither path can
 # silently drift from the other.  Each helper encapsulates a single
-# install-time concern.
+# install-time concern.  They live in install.sh (not lib/) because they
+# reference DOTFILES_DIR / DOTFILES_SOURCE_SUBDIR and are orchestrated by
+# the two paths below — keeping them next to the orchestrators makes the
+# dataflow visible.
 
 # apply_macos_prefs — runs macos/apply-settings.sh idempotently.  Fresh
 # install is permitted to surface a soft warning if partial failure
@@ -259,61 +263,6 @@ install_omz() {
     fi
 }
 
-# sync_neovim_config — copies the managed init.vim into ~/.config/nvim.
-sync_neovim_config() {
-    if [ ! -f "${DOTFILES_DIR}/${DOTFILES_SOURCE_SUBDIR}/config/nvim/init.vim" ]; then
-        return 0
-    fi
-    mkdir -p "$HOME/.config/nvim"
-    info "Syncing Neovim config..."
-    cp "${DOTFILES_DIR}/${DOTFILES_SOURCE_SUBDIR}/config/nvim/init.vim" \
-       "$HOME/.config/nvim/init.vim"
-}
-
-# sync_nvim_symlinks — links ~/.local/bin/{vim,vi} to whatever `nvim`
-# resolves to.  ~/.local/bin is prepended to PATH via .zshenv so these
-# take priority over any system vim in /usr/bin or /usr/local/bin.
-#   $1: tolerance — "warn" surfaces per-link success, "true" silences
-#       everything; defaults to "warn".
-sync_nvim_symlinks() {
-    _tolerance="${1:-warn}"
-    _target="$(command -v nvim 2>/dev/null)" || return 0
-    mkdir -p "$HOME/.local/bin"
-    for _bin in vim vi; do
-        if [ "$_tolerance" = "warn" ]; then
-            ln -sf "$_target" "$HOME/.local/bin/$_bin" \
-                && info "Created ~/.local/bin/$_bin → nvim"
-        else
-            ln -sf "$_target" "$HOME/.local/bin/$_bin" 2>/dev/null || true
-        fi
-    done
-}
-
-# ensure_vim_plug — installs vim-plug's autoload script if absent.
-ensure_vim_plug() {
-    if vim_plug_installed; then
-        return 0
-    fi
-    info "Installing vim-plug for Neovim..."
-    _plug_dir="$HOME/.local/share/nvim/site/autoload"
-    mkdir -p "$_plug_dir"
-    curl -sfL 'https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim' \
-        --output "$_plug_dir/plug.vim"
-}
-
-# install_nvim_plugins — runs :PlugInstall non-interactively.  Tolerates
-# plugin-install errors (see original comments at fresh_install:308 and
-# update:474 for context).
-install_nvim_plugins() {
-    if ! vim_plug_installed || [ ! -s "$HOME/.config/nvim/init.vim" ]; then
-        return 0
-    fi
-    info "Syncing Neovim plugins..."
-    nvim --headless +PlugInstall +qall 2>/dev/null || \
-        [ "${1:-warn}" = "true" ] || \
-        warn "Some Neovim plugins may not have been installed. Run :PlugInstall manually."
-}
-
 # install_claude_config — applies claude/install.sh if shipped.
 #   $1: tolerance — "true" swallows errors, "warn" surfaces them.
 install_claude_config() {
@@ -382,15 +331,13 @@ fresh_install() {
 
     install_homebrew
 
-    brew_install_if_missing "JetBrains Mono" font-jetbrains-mono --cask
+    install_core_casks
 
     # Install the brew-managed git (always; ensure_brew_git's earlier
     # early-return already verified it as a hard dependency, so this is
     # a no-op upgrade when present and a fresh install when not).
     info "Installing git via Homebrew..."
     brew install git
-
-    brew_install_if_missing "iTerm2" iterm2 --cask
 
     install_omz
 
@@ -400,9 +347,7 @@ fresh_install() {
     info "Applying iTerm2 preferences..."
     apply_iterm_prefs warn
 
-    brew_install_if_missing "zplug" zplug
-
-    brew_install_if_missing "Neovim" neovim
+    install_core_formulas
 
     sync_neovim_config
 
@@ -412,49 +357,16 @@ fresh_install() {
 
     install_nvim_plugins warn
 
-    brew_install_if_missing "chezmoi" chezmoi
-
-    brew_install_if_missing "Claude Code" claude-code
     install_claude_config warn
 
     install_devtools warn
 
-    # Desktop apps — Browsers
-    brew_install_if_missing "Google Chrome" google-chrome --cask
-    brew_install_if_missing "Firefox" firefox --cask
+    # AI auxiliary tools — must run AFTER install_devtools so uv is on PATH
+    # (uv is a devtools dependency).
+    install_ai_aux_tools warn
 
-    # Desktop apps — Communication & Messaging
-    brew_install_if_missing "Slack" slack --cask
-    brew_install_if_missing "WhatsApp" whatsapp --cask
-    brew_install_if_missing "Telegram" telegram --cask
-
-    # Desktop apps — AI Assistants
-    brew_install_if_missing "ChatGPT" chatgpt --cask
-    brew_install_if_missing "Claude" claude --cask
-    brew_install_if_missing "Codex" codex-app --cask
-
-    # Desktop apps — Productivity & Utilities
-    brew_install_if_missing "Mos" mos --cask
-    brew_install_if_missing "Alfred" alfred --cask
-    brew_install_if_missing "Contexts" contexts --cask
-    brew_install_if_missing "BetterTouchTool" bettertouchtool --cask
-    brew_install_if_missing "Moom" moom --cask
-    brew_install_if_missing "AppCleaner" appcleaner --cask
-
-    # Desktop apps — Menu Bar & System Monitoring
-    brew_install_if_missing "iStat Menus" istat-menus --cask
-    brew_install_if_missing "Bartender" bartender --cask
-
-    # Desktop apps — Security & Networking
-    brew_install_if_missing "1Password" 1password --cask
-    brew_install_if_missing "NordVPN" nordvpn --cask
-
-    # Desktop apps — Developer Tools
-    brew_install_if_missing "Docker Desktop" docker-desktop --cask
-
-    # CLI tools (not desktop GUI apps).
-    brew_install_if_missing "opencode CLI" opencode
-    brew_install_if_missing "Codex CLI" codex --cask
+    # Desktop apps + CLI tools — shared with the update path.
+    install_all_desktop_apps
 
     info "Applying dotfiles..."
     chezmoi apply --source "${DOTFILES_DIR}/${DOTFILES_SOURCE_SUBDIR}"
@@ -479,6 +391,8 @@ fresh_install() {
     # Mark done
     touch "$MARKER_FILE"
     info "Dotfiles installed successfully."
+    info "To configure AI tools (rtk/engram/graphify) for Claude Code + opencode, run:"
+    info "  sh \"$DOTFILES_DIR/setup-ai-tools.sh\""
 }
 
 # ---------------------------- Update ----------------------------
@@ -516,52 +430,16 @@ update() {
         return
     fi
 
-    brew_install_if_missing "JetBrains Mono" font-jetbrains-mono --cask
-    brew_install_if_missing "chezmoi" chezmoi
-    brew_install_if_missing "zplug" zplug
-    brew_install_if_missing "Neovim" neovim
-    brew_install_if_missing "Claude Code" claude-code
+    install_core_formulas
 
-    # Desktop apps — Browsers
-    brew_install_if_missing "Google Chrome" google-chrome --cask
-    brew_install_if_missing "Firefox" firefox --cask
-
-    # Desktop apps — Communication & Messaging
-    brew_install_if_missing "Slack" slack --cask
-    brew_install_if_missing "WhatsApp" whatsapp --cask
-    brew_install_if_missing "Telegram" telegram --cask
-
-    # Desktop apps — AI Assistants
-    brew_install_if_missing "ChatGPT" chatgpt --cask
-    brew_install_if_missing "Claude" claude --cask
-    brew_install_if_missing "Codex" codex-app --cask
-
-    # Desktop apps — Productivity & Utilities
-    brew_install_if_missing "Mos" mos --cask
-    brew_install_if_missing "Alfred" alfred --cask
-    brew_install_if_missing "Contexts" contexts --cask
-    brew_install_if_missing "BetterTouchTool" bettertouchtool --cask
-    brew_install_if_missing "Moom" moom --cask
-    brew_install_if_missing "AppCleaner" appcleaner --cask
-
-    # Desktop apps — Menu Bar & System Monitoring
-    brew_install_if_missing "iStat Menus" istat-menus --cask
-    brew_install_if_missing "Bartender" bartender --cask
-
-    # Desktop apps — Security & Networking
-    brew_install_if_missing "1Password" 1password --cask
-    brew_install_if_missing "NordVPN" nordvpn --cask
-
-    # Desktop apps — Developer Tools
-    brew_install_if_missing "Docker Desktop" docker-desktop --cask
-
-    # CLI tools (not desktop GUI apps).
-    brew_install_if_missing "opencode CLI" opencode
-    brew_install_if_missing "Codex CLI" codex --cask
+    install_all_desktop_apps
 
     install_claude_config true
 
     install_devtools true
+
+    # AI auxiliary tools — must run AFTER install_devtools so uv is on PATH.
+    install_ai_aux_tools true
 
     sync_neovim_config
     sync_nvim_symlinks true
@@ -589,6 +467,8 @@ update() {
     run_zplug_install
 
     info "Dotfiles updated successfully."
+    info "To configure AI tools (rtk/engram/graphify) for Claude Code + opencode, run:"
+    info "  sh \"$DOTFILES_DIR/setup-ai-tools.sh\""
 }
 
 # ---------------------------- Entry point ----------------------------
@@ -615,6 +495,22 @@ main() {
     # Always cd into the repo so subsequent git/chezmoi commands work
     # regardless of the current working directory at script invocation.
     cd "$DOTFILES_DIR"
+
+    # Source the per-group brew package list and Neovim helpers from lib/.
+    # install.sh keeps its own inline copies of the bootstrap primitives
+    # (info/warn/cmd_available/brew_installed/brew_install_if_missing/
+    # symlink_into_place/install_uv_tool etc.) because those are needed
+    # pre-clone too (lib/ doesn't exist yet on the curl-bootstrap path).
+    # The bootstrap subsystem (lib/bootstrap.sh) is also kept inline for
+    # the same reason.  lib/common.sh exists for the five child scripts
+    # (devtools/install.sh, claude/install.sh, setup-ai-tools.sh,
+    # macos/apply-settings.sh, iterm2/apply-iterm.sh) so they share one
+    # canonical definition; install.sh has its own and doesn't need to
+    # re-source it.
+    # shellcheck source=lib/brew-packages.sh
+    . "$DOTFILES_DIR/lib/brew-packages.sh"
+    # shellcheck source=lib/nvim.sh
+    . "$DOTFILES_DIR/lib/nvim.sh"
 
     if is_installed; then
         update
