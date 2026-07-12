@@ -49,7 +49,6 @@ install_messaging() {
 install_ai_assistants() {
     brew_install_if_missing "ChatGPT" chatgpt --cask
     brew_install_if_missing "Claude" claude --cask
-    brew_install_if_missing "Codex" codex-app --cask
 }
 
 # Desktop apps — Productivity & Utilities

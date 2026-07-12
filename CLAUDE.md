@@ -180,7 +180,7 @@ Dev Tools, CLI tools):
 | `install_core_formulas` | zplug, neovim, chezmoi, claude-code | both `fresh_install` and `update` (a formula may have been `brew uninstall`ed) |
 | `install_browsers` | Google Chrome, Firefox | both |
 | `install_messaging` | Slack, WhatsApp, Telegram | both |
-| `install_ai_assistants` | ChatGPT, Claude, Codex | both |
+| `install_ai_assistants` | ChatGPT, Claude | both |
 | `install_productivity` | Mos, Alfred, Contexts, BetterTouchTool, Moom, AppCleaner | both |
 | `install_menu_bar` | iStat Menus, Bartender | both |
 | `install_security` | 1Password, NordVPN | both |
@@ -221,7 +221,7 @@ install_ai_aux_tools warn
 install_all_desktop_apps
   install_browsers        (Google Chrome, Firefox)
   install_messaging       (Slack, WhatsApp, Telegram)
-  install_ai_assistants   (ChatGPT, Claude, Codex)
+  install_ai_assistants   (ChatGPT, Claude)
   install_productivity    (Mos, Alfred, Contexts, BetterTouchTool, Moom, AppCleaner)
   install_menu_bar        (iStat Menus, Bartender)
   install_security        (1Password, NordVPN)
@@ -440,7 +440,6 @@ Casks are grouped below to mirror the grouped `brew_install_if_missing` blocks i
 |---|---|
 | `chatgpt` | OpenAI ChatGPT desktop app |
 | `claude` | Anthropic Claude desktop app (GUI) — **distinct from the `claude-code` CLI formula** |
-| `codex-app` | OpenAI Codex desktop app (GUI) for managing coding agents |
 
 #### Productivity & Utilities
 
@@ -475,15 +474,11 @@ Casks are grouped below to mirror the grouped `brew_install_if_missing` blocks i
 | `font-jetbrains-mono` | Monospace font for NERDTree; referenced in iTerm2 prefs as `JetBrainsMono-Regular`. The font name must match exactly in the CFString plist entry. |
 | `visual-studio-code` | VS Code editor (user settings symlinked from `devtools/vscode/settings.json`) |
 | `docker-desktop` | Docker Desktop GUI for containerised development. **The `docker` formula (CLI-only) is intentionally NOT installed** — `docker-desktop --cask` is the sole source of `docker` on this machine. **Note:** as of 2024 Docker Inc. requires a paid subscription for larger organisations using Docker Desktop; personal/small-org use remains free. |
-| `codex` | OpenAI Codex CLI (terminal coding agent, `codex` binary) — **distinct from the `codex-app` cask**. Listed here because it ships as a cask, not a formula. |
+| `codex` | OpenAI Codex CLI (terminal coding agent, `codex` binary) — **distinct from the `chatgpt` cask**, which is the OpenAI ChatGPT desktop app. Listed here because it ships as a cask, not a formula. |
 
 **Note:** `claude-code` (formula) installs the `claude` CLI binary; `claude` (cask) installs
 the `Claude.app` desktop GUI app. They are unrelated Homebrew packages that happen to share
 a vendor. Do not conflate them.
-
-**Note:** `codex` (cask) installs the `codex` CLI binary; `codex-app` (cask) installs
-the `Codex.app` desktop GUI app for managing coding agents. They are unrelated Homebrew
-packages that happen to share a vendor. Do not conflate them.
 
 **Note on Amphetamine:** Amphetamine (keep-Mac-awake utility) is **intentionally NOT**
 installed via Homebrew because it is distributed exclusively through the Mac App Store

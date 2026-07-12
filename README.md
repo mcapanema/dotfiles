@@ -20,7 +20,7 @@ sh -c "$(curl -fsSL https://raw.githubusercontent.com/mcapanema/dotfiles/main/in
 | **chezmoi** | Dotfile manager (source in `dotfiles/` subdirectory) |
 | **Claude Code** | Anthropic's terminal-based AI coding assistant (`claude` CLI) |
 | **opencode** | opencode CLI |
-| **Desktop apps** | Google Chrome, Firefox, Slack, WhatsApp, Telegram, ChatGPT, Claude, Codex, Codex CLI, Mos |
+| **Desktop apps** | Google Chrome, Firefox, Slack, WhatsApp, Telegram, ChatGPT, Claude, Codex CLI, Mos |
 | **Dev toolchains** | VSCode (managed settings), Node + nvm, Ruby + rvm, Python + uv + pipx, Rust + rustup |
 | **AI auxiliary tools** | rtk (token compression), engram (persistent memory), graphify (knowledge graph), headroom (context compression). Binaries installed by `install.sh`; agent integration via `setup-ai-tools.sh` |
 | **macOS settings** | Developer-friendly system defaults (keyboard, trackpad, security, Time Machine) |
@@ -41,7 +41,7 @@ The script will:
 2. Install Homebrew if missing
 3. Install iTerm2, Neovim, zplug, chezmoi, Claude Code, opencode
 4. Install dev toolchains: VSCode, Node/nvm, Ruby/rvm, Python/uv/pipx, Rust/rustup
-5. Install desktop apps: Google Chrome, Firefox, Slack, WhatsApp, Telegram, ChatGPT, Claude, Codex, Codex CLI, Mos
+5. Install desktop apps: Google Chrome, Firefox, Slack, WhatsApp, Telegram, ChatGPT, Claude, Codex CLI, Mos
 6. Import iTerm2 preferences from the versioned snapshot
 7. Bootstrap Oh My Zsh and zplug plugins (Pure prompt, syntax highlighting, autosuggestions)
 8. Symlink `vim` and `vi` → `nvim` in `~/.local/bin`
