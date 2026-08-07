@@ -151,6 +151,8 @@ format_rl() {
         return
     fi
 
+    pct=$(printf "%.0f" "$pct")
+
     if [ "$pct" -ge 80 ]; then
         color="$RED"
     elif [ "$pct" -ge 60 ]; then
