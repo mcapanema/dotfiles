@@ -9,13 +9,6 @@ This directory manages Claude Code CLI/App installation and configuration for th
 - `templates/.zshenv` — API key template (sourced by `dotfiles/.zshenv`)
 - `install.sh` — Standalone installation script
 
-## Installation
-
-### One-liner (recommended)
-```shell
-sh -c "$(curl -fsSL https://raw.githubusercontent.com/mcapanema/dotfiles/refs/heads/main/install.sh)"
-```
-
 ### Standalone
 ```shell
 ./claude/install.sh
