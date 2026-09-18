@@ -30,7 +30,7 @@ fresh-install and update paths.
 ├── install.sh                   # Bootstrap / update orchestrator
 ├── setup-ai-tools.sh            # Configure rtk/engram/graphify for Claude Code + opencode (manual run after install.sh)
 ├── chezmoi.toml                 # chezmoi config (source=repo root, files=dotfiles/)
-├── .gitignore                   # Ignores docs/superpowers/ and .worktrees/
+├── .gitignore                   # Ignores docs/superpowers/, .worktrees/ and .claude/worktrees/
 ├── iterm2/
 │   ├── apply-iterm.sh           # Import plist snapshot (verifies with plutil -lint first)
 │   ├── com.googlecode.iterm2.plist.export  # Versioned prefs (ALWAYS use CFString font form)
@@ -606,6 +606,7 @@ End-to-end flow:
 ```
 docs/superpowers/
 .worktrees/
+.claude/worktrees/
 ```
 
 If you create a git worktree for an experiment, it will be invisible to `git status` in the
