@@ -610,8 +610,9 @@ docs/superpowers/
 ```
 
 If you create a git worktree for an experiment, it will be invisible to `git status` in the
-main checkout. Delete the `.worktrees/` entry or remove the worktree entry from the file
-if you need to track it.
+main checkout. `.worktrees/` is the manual-worktree location; `.claude/worktrees/` is where
+Claude Code's native worktree tool puts its worktrees. Remove the matching entry from the
+file if you need to track one.
 
 ---
 

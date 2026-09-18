@@ -16,7 +16,8 @@ fi
 # printf "%.0f" and awk parse dot-decimals only. Under a comma-decimal locale
 # (pt_BR) bash 3.2's printf rejects Claude's floats and set -e kills the
 # statusline before it prints. Pin the numeric category only so date keeps
-# localized day names. LC_ALL overrides LC_NUMERIC, so clear it first.
+# day names localized via LANG. LC_ALL overrides LC_NUMERIC, so clear it
+# first (an LC_ALL-only setup then falls back to LANG/C for date).
 unset LC_ALL
 export LC_NUMERIC=C
 
