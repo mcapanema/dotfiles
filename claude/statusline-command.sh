@@ -1,7 +1,8 @@
 #!/bin/sh
 #
 # Claude Code Statusline
-# Parses Claude's JSON output and renders a statusline with model, usage, cost, and rate limits.
+# Parses Claude's JSON output and renders a three-line statusline.
+# How to read it and how to tune it: claude/README.md (Statusline section).
 #
 # Colors come from two families and nothing else:
 #   severity (OK/WARN/CRIT): how worried to be. Every gauge uses it.
