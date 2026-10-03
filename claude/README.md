@@ -54,13 +54,27 @@ Line 1 is the session (model and limits), line 2 is time and spend, line 3 is th
 
 ### Colors
 
-Every color belongs to one of two scales:
+Every color belongs to one of two scales, plus dim:
 
-| Scale | Colors | Meaning |
+| Scale | Transition | Meaning |
 |---|---|---|
-| **Severity** | green → yellow → red | How worried to be. Used by every gauge. |
-| **Power** | teal → blue → lavender → pink → magenta | How much capability is engaged (model, effort, fast mode). It never uses green, yellow or red, so it can't be mistaken for a warning. |
-| **Dim** | grey | Not reported yet, or background detail. |
+| **Severity** | 🟢 → 🟡 → 🔴 | How worried to be. Used by every gauge. |
+| **Power** | 🩵 → 💙 → 💜 → 🩷 → 💗 | How much capability is engaged (model, effort, fast mode). It never uses green, yellow or red, so it can't be mistaken for a warning. |
+| **Dim** | 🩶 | Not reported yet, or background detail. |
+
+The emoji are the closest match available; the terminal shows these exact colors:
+
+| Step | Terminal color | Used for |
+|---|---|---|
+| 🟢 | green (ANSI 32) | fine |
+| 🟡 | yellow (ANSI 33) | watch it |
+| 🔴 | red (256-color 196) | act on it |
+| 🩵 | teal (256-color 80) | `low` effort, Haiku |
+| 💙 | blue (256-color 75) | `medium` effort |
+| 💜 | lavender (256-color 141) | `high` effort, Sonnet |
+| 🩷 | pink (256-color 213) | `xhigh` effort |
+| 💗 | magenta (256-color 201) | `max` / `ultracode` effort, Opus, Fable, `fast` |
+| 🩶 | dim (ANSI 2) | `--` placeholders, context size, speed age |
 
 Most gauges are "higher is worse". Two are reversed, "lower is worse": cache hit % and tok/s.
 
