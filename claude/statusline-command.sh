@@ -78,7 +78,9 @@ P5="${ESC}[38;5;201m"  # magenta
 # Severity thresholds (warn, crit). Tune here; every gauge reads these.
 CTX_WARN=40;   CTX_CRIT=60    # % of context window; quality drops well before auto-compact
 COST_WARN=10;  COST_CRIT=30   # session USD
-LIMIT_WARN=80; LIMIT_CRIT=100 # % of a rate-limit window, projected to its reset
+LIMIT_WARN=60; LIMIT_CRIT=80  # % of a rate-limit window used so far
+PACE_WARN=80;  PACE_CRIT=100  # % of a rate-limit window projected at its reset
+HIT_WARN=80;   HIT_CRIT=50    # prompt cache hit %; lower is worse (see sev_low)
 
 # sev VALUE WARN CRIT -> severity color for an integer where higher is worse.
 sev() {
@@ -88,6 +90,28 @@ sev() {
         printf '%s' "$WARN"
     else
         printf '%s' "$OK"
+    fi
+}
+
+# sev_low VALUE WARN CRIT -> severity color for an integer where lower is worse.
+sev_low() {
+    if [ "$1" -lt "$3" ]; then
+        printf '%s' "$CRIT"
+    elif [ "$1" -lt "$2" ]; then
+        printf '%s' "$WARN"
+    else
+        printf '%s' "$OK"
+    fi
+}
+
+# dur SECONDS -> 2d3h / 4h9m / 29m
+dur() {
+    if [ "$1" -ge 86400 ]; then
+        printf '%sd%sh' $(($1 / 86400)) $((($1 % 86400) / 3600))
+    elif [ "$1" -ge 3600 ]; then
+        printf '%sh%sm' $(($1 / 3600)) $((($1 % 3600) / 60))
+    else
+        printf '%sm' $(($1 / 60))
     fi
 }
 
@@ -136,7 +160,8 @@ elif [ "$cache_seen" = "true" ]; then
     cache_str="${WARN}cold${RESET}"
 fi
 if [ -n "$cache_str" ] && [ -n "$cache_hit" ]; then
-    cache_str="${cache_str} $(awk "BEGIN { printf \"%.0f\", $cache_hit * 100 }")% hit"
+    hit=$(awk "BEGIN { printf \"%.0f\", $cache_hit * 100 }")
+    cache_str="${cache_str} | $(sev_low "$hit" "$HIT_WARN" "$HIT_CRIT")${hit}% hit${RESET}"
 fi
 
 if [ -n "$worktree" ]; then
@@ -195,34 +220,26 @@ format_rl() {
     remaining=$((reset_ts - now))
     elapsed=$((window - remaining))
 
-    # Linear projection to reset. Skipped in the first 10% of the window,
-    # where one burst would extrapolate to nonsense.
-    projected="$pct"
-    if [ $((elapsed * 10)) -ge "$window" ]; then
-        projected=$((pct * window / elapsed))
-    fi
-    worst="$pct"
-    [ "$projected" -gt "$worst" ] && worst="$projected"
-    color=$(sev "$worst" "$LIMIT_WARN" "$LIMIT_CRIT")
-
+    # Pace: linear projection to reset, colored apart from usage. Skipped in
+    # the first 10% of the window (one burst would extrapolate to nonsense)
+    # and once already capped.
     pace=""
-    if [ "$projected" -gt "$pct" ] && [ "$projected" -ge "$LIMIT_WARN" ]; then
-        pace=" →${projected}%"
+    if [ "$pct" -gt 0 ] && [ "$pct" -lt 100 ] && [ $((elapsed * 10)) -ge "$window" ]; then
+        projected=$((pct * window / elapsed))
+        if [ "$projected" -ge "$PACE_CRIT" ]; then
+            # Time until 100% at the current rate.
+            pace=" ${CRIT}⚠$(dur $((elapsed * (100 - pct) / pct)))${RESET}"
+        elif [ "$projected" -ge "$PACE_WARN" ]; then
+            pace=" ${WARN}→${projected}%${RESET}"
+        fi
     fi
 
     if [ "$label" = "7d" ]; then
         when=$(date -r "$reset_ts" "+%a %-I:%M%p")
     else
-        hours=$((remaining / 3600))
-        mins=$(((remaining % 3600) / 60))
-        if [ "$hours" -gt 0 ]; then
-            countdown="${hours}h${mins}m"
-        else
-            countdown="${mins}m"
-        fi
-        when="$(date -r "$reset_ts" "+%-I:%M%p") (${countdown})"
+        when="$(date -r "$reset_ts" "+%-I:%M%p") ($(dur "$remaining"))"
     fi
-    printf "%s%s %s%%%s • %s%s" "$color" "$label" "$pct" "$pace" "$when" "$RESET"
+    printf "%s%s %s%%%s%s • %s" "$(sev "$pct" "$LIMIT_WARN" "$LIMIT_CRIT")" "$label" "$pct" "$RESET" "$pace" "$when"
 }
 
 rate_limit_str="$(format_rl "$rl_5h_pct" "$rl_5h_reset" "5h" 18000) | $(format_rl "$rl_7d_pct" "$rl_7d_reset" "7d" 604800)"

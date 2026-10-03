@@ -83,7 +83,7 @@ has   cost-warn         "$out" "${WARN}\$12.50${RESET}"
 out=$(render '{"cost":{"total_cost_usd":45}}')
 has   cost-crit         "$out" "${CRIT}\$45.00${RESET}"
 out=$(render "{\"rate_limits\":{\"five_hour\":{\"used_percentage\":30,\"resets_at\":$((now + 3600))}}}")
-has   limit-ok          "$out" "${OK}5h 30% •"
+has   limit-ok          "$out" "${OK}5h 30%${RESET} •"
 
 # --- git counts are not padded by macOS wc -------------------------------------------------
 tmp=$(mktemp -d)
@@ -94,21 +94,31 @@ git -C "$tmp" add f
 out=$(cd "$tmp" && render '{}')
 has   git-staged        "$out" "${OK}+1${RESET}"
 
-# --- pace-aware rate limits -------------------------------------------------------
-# Remaining times carry a 15s pad so a slow run cannot shift the integer projection.
-out=$(render "{\"rate_limits\":{
-    \"five_hour\":{\"used_percentage\":60,\"resets_at\":$((now + 10815))},
-    \"seven_day\":{\"used_percentage\":10,\"resets_at\":$((now + 518415))}}}")
-has   pace-5h-crit      "$out" "${CRIT}5h 60% →150% •"
-has   pace-7d-ok        "$out" "${OK}7d 10% •"
-lacks pace-7d-no-arrow  "$out" "7d 10% →"
-out=$(render "{\"rate_limits\":{\"five_hour\":{\"used_percentage\":5,\"resets_at\":$((now + 17015))}}}")
-has   pace-early-raw    "$out" "${OK}5h 5% •"
+# --- rate limits: usage colored by raw %, pace colored by projection ---------------------
+# Offsets carry padding so a slow run cannot cross a minute or % boundary.
+# 60% used, 2h elapsed -> projected ~149%: usage WARN, cap in 1h20m (CRIT).
+out=$(render "{\"rate_limits\":{\"five_hour\":{\"used_percentage\":60,\"resets_at\":$((now + 10770))}}}")
+has   pace-5h-over      "$out" "${WARN}5h 60%${RESET} ${CRIT}⚠1h20m${RESET} •"
+lacks pace-no-reset-tint "$out" "${CRIT}⚠1h20m${RESET} • ${ESC}"
+# 40% used, 2d elapsed -> projected 140%: usage OK, pace CRIT in days.
+out=$(render "{\"rate_limits\":{\"seven_day\":{\"used_percentage\":40,\"resets_at\":$((now + 432000))}}}")
+has   pace-7d-over      "$out" "${OK}7d 40%${RESET} ${CRIT}⚠3d0h${RESET} •"
+# 10% used, 1d elapsed -> projected 70%: no pace marker.
+out=$(render "{\"rate_limits\":{\"seven_day\":{\"used_percentage\":10,\"resets_at\":$((now + 518415))}}}")
+has   pace-7d-ok        "$out" "${OK}7d 10%${RESET} •"
+# 85% used, 10m left -> projected 88%: usage CRIT, pace WARN shows the landing %.
 out=$(render "{\"rate_limits\":{\"five_hour\":{\"used_percentage\":85,\"resets_at\":$((now + 700))}}}")
-has   pace-late-warn    "$out" "${WARN}5h 85% →88% •"
+has   pace-late-warn    "$out" "${CRIT}5h 85%${RESET} ${WARN}→88%${RESET} •"
+# First 10% of the window: one burst must not project.
+out=$(render "{\"rate_limits\":{\"five_hour\":{\"used_percentage\":5,\"resets_at\":$((now + 17015))}}}")
+has   pace-early-raw    "$out" "${OK}5h 5%${RESET} •"
 # Clock skew: reset further away than the window itself -> no projection.
 out=$(render "{\"rate_limits\":{\"five_hour\":{\"used_percentage\":30,\"resets_at\":$((now + 20000))}}}")
-has   pace-skew-raw     "$out" "${OK}5h 30% •"
+has   pace-skew-raw     "$out" "${OK}5h 30%${RESET} •"
+# Already capped: no pace marker, usage CRIT.
+out=$(render "{\"rate_limits\":{\"five_hour\":{\"used_percentage\":100,\"resets_at\":$((now + 3600))}}}")
+has   pace-capped       "$out" "${CRIT}5h 100%${RESET} •"
+lacks pace-capped-mark  "$out" "⚠"
 
 # --- context size (always dim: a label, not a gauge), session churn --------------------
 out=$(render "$(cat "$DIR/sample-claude-status.json")")
@@ -124,9 +134,11 @@ lacks churn-zero        "$out" "📝"
 # --- prompt cache --------------------------------------------------------------------
 # expires_at carries a 30s pad so a slow run still rounds up to 5m.
 out=$(render "{\"prompt_cache\":{\"warm\":true,\"caching_observed\":true,\"expires_at\":$((now + 270)),\"hit_ratio\":0.92}}")
-has   cache-warm        "$out" "💾 ${OK}5m${RESET} 92% hit"
+has   cache-warm        "$out" "💾 ${OK}5m${RESET} | ${OK}92% hit${RESET}"
 out=$(render "{\"prompt_cache\":{\"warm\":false,\"caching_observed\":true,\"expires_at\":$((now - 60)),\"hit_ratio\":0.4}}")
-has   cache-cold        "$out" "💾 ${WARN}cold${RESET} 40% hit"
+has   cache-cold        "$out" "💾 ${WARN}cold${RESET} | ${CRIT}40% hit${RESET}"
+out=$(render "{\"prompt_cache\":{\"warm\":true,\"caching_observed\":true,\"expires_at\":$((now + 270)),\"hit_ratio\":0.7}}")
+has   cache-hit-warn    "$out" "| ${WARN}70% hit${RESET}"
 out=$(render '{"prompt_cache":{"warm":false,"caching_observed":false,"expires_at":null,"hit_ratio":null}}')
 lacks cache-unused      "$out" "💾"
 
