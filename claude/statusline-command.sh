@@ -42,6 +42,9 @@ vars=$(printf '%s' "$input" | jq -r '
     @sh "ctx_size=\(.context_window.context_window_size // "")",
     @sh "total_cost=\(.cost.total_cost_usd // "")",
     @sh "duration_ms=\(.cost.total_duration_ms // "")",
+    @sh "session_id=\(.session_id // "")",
+    @sh "api_ms=\(.cost.total_api_duration_ms // "")",
+    @sh "out_tokens=\(.context_window.total_output_tokens // "")",
     @sh "cache_warm=\(.prompt_cache.warm // "")",
     @sh "cache_expires=\(.prompt_cache.expires_at // "")",
     @sh "cache_hit=\(.prompt_cache.hit_ratio // "")",
@@ -88,6 +91,7 @@ LIMIT_WARN=60; LIMIT_CRIT=80  # % of a rate-limit window used so far
 PACE_WARN=80;  PACE_CRIT=100  # burn rate x100 (used% / elapsed%); 100 = lands exactly on the cap
 HIT_WARN=80;   HIT_CRIT=50    # prompt cache hit %; lower is worse (see sev_low)
 MISS_RECENT=600               # seconds a cache miss stays on screen
+SPEED_WARN=20; SPEED_CRIT=10  # output tok/s of the last response; lower is worse
 
 # sev VALUE WARN CRIT -> severity color for an integer where higher is worse.
 sev() {
@@ -168,6 +172,54 @@ if [ -n "$cache_str" ] && [ -n "$cache_hit" ]; then
     hit=$(awk "BEGIN { printf \"%.0f\", $cache_hit * 100 }")
     cache_str="${cache_str} • $(sev_low "$hit" "$HIT_WARN" "$HIT_CRIT")${hit}% hit${RESET}"
 fi
+# Speed: output tokens of the latest response / API time added since the
+# previous refresh. The API total only grows when a response lands, so its
+# last growth is "last reply"; refreshInterval keeps that age ticking while a
+# request hangs. State per session in $TMPDIR: "api_ms change_ts rate".
+# ponytail: approximate; a refresh spanning several API calls (tool loops,
+# subagents) reads slower. Upgrade path: parse transcript_path timings.
+speed_str=""
+case "$session_id" in
+    ""|*[!A-Za-z0-9_-]*) ;;
+    *)
+        if [ -n "$api_ms" ]; then
+            api_ms=${api_ms%.*}
+            state="${TMPDIR:-/tmp}/claude-statusline-${session_id}"
+            prev_api="" change_ts="" rate="-"
+            if [ -f "$state" ]; then
+                read -r prev_api change_ts rate < "$state" || true
+            fi
+            # Corrupt or partial state: start over.
+            case "$prev_api:$change_ts" in
+                :*|*:|*[!0-9:]*) prev_api="" ;;
+            esac
+            case "$rate" in
+                ""|*[!0-9]*) rate="-" ;;
+            esac
+            if [ -z "$prev_api" ] || [ "$api_ms" -lt "$prev_api" ]; then
+                change_ts="$now" rate="-"
+            elif [ "$api_ms" -gt "$prev_api" ]; then
+                change_ts="$now" rate="-"
+                [ -n "$out_tokens" ] && rate=$((${out_tokens%.*} * 1000 / (api_ms - prev_api)))
+            fi
+            if [ "$api_ms" != "$prev_api" ]; then
+                { printf '%s %s %s\n' "$api_ms" "$change_ts" "$rate" > "$state.$$" && mv -f "$state.$$" "$state"; } 2>/dev/null || true
+            fi
+            if [ "$rate" = "-" ]; then
+                speed_str="${DIM}--${RESET}"
+            else
+                age=$((now - change_ts))
+                if [ "$age" -lt 60 ]; then
+                    age_str="${age}s"
+                else
+                    age_str=$(dur "$age")
+                fi
+                speed_str="$(sev_low "$rate" "$SPEED_WARN" "$SPEED_CRIT")${rate} tok/s${RESET} • ${DIM}${age_str} ago${RESET}"
+            fi
+        fi
+        ;;
+esac
+
 # A recent miss re-billed the whole context; say why while it is still news.
 if [ -n "$cache_str" ] && [ -n "$miss_at" ]; then
     miss_age=$((now - ${miss_at%.*}))
@@ -288,6 +340,7 @@ line1="🤖 ${model_str}"
 line1="${line1} | 🧠 ${usage_str} | ⏱️ ${rate_limit_str}"
 
 line2="💰 ${cost_str}"
+[ -n "$speed_str" ] && line2="⚡ ${speed_str} | ${line2}"
 [ -n "$duration_ms" ] && line2="⌛ $(dur $((${duration_ms%.*} / 1000))) | ${line2}"
 [ -n "$cache_str" ] && line2="${line2} | 💾 ${cache_str}"
 

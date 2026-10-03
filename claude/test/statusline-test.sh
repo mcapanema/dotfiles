@@ -23,6 +23,11 @@ P5="${ESC}[38;5;201m"
 now=$(date +%s)
 fails=0
 
+# Scratch dir for git repos and the script's per-session speed state.
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+export TMPDIR="$tmp"
+
 render() {
     printf '%s' "$1" | /bin/sh "$SCRIPT"
 }
@@ -55,6 +60,7 @@ has   empty-model       "$out" "Unknown Model"
 has   empty-context     "$out" "${DIM}--%${RESET}"
 has   empty-cost        "$out" "${DIM}\$--${RESET}"
 has   empty-limits      "$out" "${DIM}7d --%${RESET}"
+lacks empty-no-speed    "$out" "⚡"
 out=$(printf '' | /bin/sh "$SCRIPT") || true
 has   empty-stdin-model "$out" "Unknown Model"
 has   empty-stdin-ctx   "$out" "${DIM}--%${RESET}"
@@ -86,8 +92,6 @@ out=$(render "{\"rate_limits\":{\"five_hour\":{\"used_percentage\":30,\"resets_a
 has   limit-ok          "$out" "${OK}5h 30%${RESET} • ${OK}×0.4${RESET} •"
 
 # --- git: branch, ahead/behind upstream, staged/modified/untracked --------------------------
-tmp=$(mktemp -d)
-trap 'rm -rf "$tmp"' EXIT
 gc() { git -c user.name=t -c user.email=t@t -c commit.gpgsign=false "$@"; }
 git init -q "$tmp/o"
 echo x > "$tmp/o/f"
@@ -107,6 +111,37 @@ out=$(cd "$tmp/c" && render '{}')
 has   git-ahead-behind  "$out" " ↑1 ${WARN}↓1${RESET}"
 has   git-modified      "$out" "${WARN}~1${RESET}"
 has   git-untracked     "$out" "${WARN}?1${RESET}"
+
+# --- speed: last response tok/s and time since it, remembered per session -----------------
+speed() {  # API_MS OUTPUT_TOKENS [SESSION_ID]
+    render "{\"session_id\":\"${3:-s1}\",\"cost\":{\"total_api_duration_ms\":$1},\"context_window\":{\"total_output_tokens\":$2}}"
+}
+out=$(speed 10000 100)
+has   speed-first       "$out" "⚡ ${DIM}--${RESET}"
+out=$(speed 15000 200)
+has   speed-ok          "$out" "⚡ ${OK}40 tok/s${RESET} • ${DIM}"
+has   speed-age-secs    "$out" "s ago${RESET}"
+out=$(speed 15000 200)
+has   speed-timer-keeps "$out" "${OK}40 tok/s${RESET}"
+# Simulate a long wait: last reply 200s ago.
+echo "15000 $((now - 200)) 40" > "$tmp/claude-statusline-s1"
+out=$(speed 15000 200)
+has   speed-stuck-age   "$out" "${OK}40 tok/s${RESET} • ${DIM}3m ago${RESET}"
+out=$(speed 25000 150)
+has   speed-warn        "$out" "${WARN}15 tok/s${RESET}"
+out=$(speed 35000 50)
+has   speed-crit        "$out" "${CRIT}5 tok/s${RESET}"
+# API total went down (/clear): start over.
+out=$(speed 1000 50)
+has   speed-reset       "$out" "⚡ ${DIM}--${RESET}"
+# Corrupt state must not blank the statusline.
+echo "garbage here" > "$tmp/claude-statusline-s1"
+out=$(speed 2000 50)
+has   speed-corrupt     "$out" "⚡ ${DIM}--${RESET}"
+# Session ids that are not plain tokens never become a path.
+out=$(speed 2000 50 "../evil")
+lacks speed-bad-id      "$out" "⚡"
+[ ! -e "$tmp/../claude-statusline-evil" ] || { echo "FAIL speed-bad-id-path: state written outside TMPDIR"; fails=$((fails + 1)); }
 
 # --- rate limits: usage by raw %, burn multiplier (used% / elapsed%) colored apart ------
 # Offsets carry padding so a slow run cannot cross a rounding boundary.
@@ -204,7 +239,7 @@ l3=$(printf '%s\n' "$out" | sed -n 3p)
 has   layout-l1-model   "$l1" "🤖 "
 has   layout-l1-limits  "$l1" "⏱️ "
 lacks layout-l1-no-cost "$l1" "💰"
-has   layout-l2-start   "$l2" "⌛ 3m | 💰 "
+has   layout-l2-start   "$l2" "⌛ 3m | ⚡ ${DIM}--${RESET} | 💰 "
 has   layout-l3-start   "$l3" "📁 "
 lacks layout-no-4th     "$(printf '%s\n' "$out" | sed -n 4p)" "📁"
 out=$(render '{}')
