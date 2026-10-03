@@ -239,7 +239,11 @@ l3=$(printf '%s\n' "$out" | sed -n 3p)
 has   layout-l1-model   "$l1" "🤖 "
 has   layout-l1-limits  "$l1" "⏱️ "
 lacks layout-l1-no-cost "$l1" "💰"
-has   layout-l2-start   "$l2" "⌛ 3m | ⚡ ${DIM}--${RESET} | 💰 "
+has   layout-l2-start   "$l2" "⌛ 3m | 💰 "
+has   layout-l2-speed-end "$l2" "${RESET} | ⚡ ${DIM}--${RESET}"
+lacks layout-l2-speed-mid "$l2" "⚡ ${DIM}--${RESET} |"
+out=$(render "{\"session_id\":\"lay\",\"cost\":{\"total_api_duration_ms\":1000},\"prompt_cache\":{\"warm\":true,\"caching_observed\":true,\"expires_at\":$((now + 270))}}")
+has   layout-l2-order   "$out" "💰 ${DIM}\$--${RESET} | 💾 ${OK}5m${RESET} | ⚡ ${DIM}--${RESET}"
 has   layout-l3-start   "$l3" "📁 "
 lacks layout-no-4th     "$(printf '%s\n' "$out" | sed -n 4p)" "📁"
 out=$(render '{}')

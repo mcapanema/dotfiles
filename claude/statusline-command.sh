@@ -340,9 +340,9 @@ line1="🤖 ${model_str}"
 line1="${line1} | 🧠 ${usage_str} | ⏱️ ${rate_limit_str}"
 
 line2="💰 ${cost_str}"
-[ -n "$speed_str" ] && line2="⚡ ${speed_str} | ${line2}"
 [ -n "$duration_ms" ] && line2="⌛ $(dur $((${duration_ms%.*} / 1000))) | ${line2}"
 [ -n "$cache_str" ] && line2="${line2} | 💾 ${cache_str}"
+[ -n "$speed_str" ] && line2="${line2} | ⚡ ${speed_str}"
 
 line3="📁 ${dir_display} | 🌳 ${worktree_str} | 🌿 ${git_str}"
 [ -n "$pr_str" ] && line3="${line3} | 🔀 ${pr_str}"
