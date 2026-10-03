@@ -3,6 +3,12 @@
 # Claude Code Statusline
 # Parses Claude's JSON output and renders a statusline with model, usage, cost, and rate limits.
 #
+# Colors come from two families and nothing else:
+#   severity (OK/WARN/CRIT): how worried to be. Every gauge uses it.
+#   power (P1..P5): how much capability is engaged (model tier, effort).
+#     The ramp avoids green/yellow/red so it is never mistaken for a warning.
+# DIM marks values Claude has not reported yet.
+#
 
 set -eu
 
@@ -21,85 +27,79 @@ fi
 unset LC_ALL
 export LC_NUMERIC=C
 
-input=$(cat)
+# One jq pass; @sh quotes every value so eval is safe on arbitrary strings.
+# Absent/null fields become ''. Note `false // ""` is also '' in jq.
+vars=$(jq -r '
+    @sh "model=\(.model.display_name // "Unknown Model")",
+    @sh "effort=\(.effort.level // "")",
+    @sh "used=\(.context_window.used_percentage // "")",
+    @sh "total_cost=\(.cost.total_cost_usd // "")",
+    @sh "worktree=\(.worktree.name // "")",
+    @sh "current_dir=\(.worktree.original_cwd // .workspace.project_dir // .cwd // "")",
+    @sh "rl_5h_pct=\(.rate_limits.five_hour.used_percentage // "")",
+    @sh "rl_5h_reset=\(.rate_limits.five_hour.resets_at // "")",
+    @sh "rl_7d_pct=\(.rate_limits.seven_day.used_percentage // "")",
+    @sh "rl_7d_reset=\(.rate_limits.seven_day.resets_at // "")"
+') || exit 0
+eval "$vars"
 
-model=$(echo "$input" | jq -r '.model.display_name // "Unknown Model"')
-effort=$(echo "$input" | jq -r '.effort.level // empty')
-
-used=$(echo "$input" | jq -r '.context_window.used_percentage // empty')
-total_input_tokens=$(echo "$input" | jq -r '.context_window.total_input_tokens // empty')
-total_output_tokens=$(echo "$input" | jq -r '.context_window.total_output_tokens // empty')
-total_duration_ms=$(echo "$input" | jq -r '.cost.total_duration_ms // empty')
-
-total_cost=$(echo "$input" | jq -r '.cost.total_cost_usd // empty')
-
-worktree=$(echo "$input" | jq -r '.worktree.name // empty')
-current_dir=$(echo "$input" | jq -r '.worktree.original_cwd // empty')
-
-rl_5h_pct=$(echo "$input" | jq -r '.rate_limits.five_hour.used_percentage // empty')
-rl_5h_reset=$(echo "$input" | jq -r '.rate_limits.five_hour.resets_at // empty')
-rl_7d_pct=$(echo "$input" | jq -r '.rate_limits.seven_day.used_percentage // empty')
-rl_7d_reset=$(echo "$input" | jq -r '.rate_limits.seven_day.resets_at // empty')
+now=$(date +%s)
 
 ESC=$(printf '\033')
-
-ORANGE="${ESC}[38;5;208m"
-PINK="${ESC}[38;5;213m"
-RED="${ESC}[38;5;196m"
-BROWN="${ESC}[38;5;130m"
-TEAL="${ESC}[38;5;80m"
-MAGENTA="${ESC}[38;5;201m"
-
-GREEN="${ESC}[32m"
-YELLOW="${ESC}[33m"
 RESET="${ESC}[0m"
+DIM="${ESC}[2m"
 
-get_color_pct() {
-    val="$1"
-    red="$2"
-    yellow="$3"
-    if [ -z "$val" ]; then
-        echo ""
-        return
-    fi
-    if [ "$val" -ge "$red" ]; then
-        echo "$RED"
-    elif [ "$val" -ge "$yellow" ]; then
-        echo "$YELLOW"
+OK="${ESC}[32m"
+WARN="${ESC}[33m"
+CRIT="${ESC}[38;5;196m"
+
+P1="${ESC}[38;5;80m"   # teal
+P2="${ESC}[38;5;75m"   # blue
+P3="${ESC}[38;5;141m"  # lavender
+P4="${ESC}[38;5;213m"  # pink
+P5="${ESC}[38;5;201m"  # magenta
+
+# Severity thresholds (warn, crit). Tune here; every gauge reads these.
+CTX_WARN=40;   CTX_CRIT=60    # % of context window; quality drops well before auto-compact
+COST_WARN=10;  COST_CRIT=30   # session USD
+LIMIT_WARN=60; LIMIT_CRIT=80  # % of a rate-limit window used
+
+# sev VALUE WARN CRIT -> severity color for an integer where higher is worse.
+sev() {
+    if [ "$1" -ge "$3" ]; then
+        printf '%s' "$CRIT"
+    elif [ "$1" -ge "$2" ]; then
+        printf '%s' "$WARN"
     else
-        echo "$GREEN"
+        printf '%s' "$OK"
     fi
 }
 
-get_model_color() {
-    model="$1"
-    case "$model" in
-        *Opus*)    echo "$MAGENTA" ;;
-        *Sonnet*)  echo "$ORANGE" ;;
-        *Haiku*)   echo "$TEAL" ;;
-        *)         echo "$RESET" ;;
-    esac
-}
-
-get_effort_color() {
-    effort="$1"
-    case "$effort" in
-        ultracode)  echo "$MAGENTA" ;;
-        max)        echo "$PINK" ;;
-        xhigh)      echo "$RED" ;;
-        high)       echo "$ORANGE" ;;
-        medium)     echo "$BROWN" ;;
-        low)        echo "$TEAL" ;;
-        *)          echo "$RESET" ;;
+# power NAME -> ramp color. Model names and effort levels share one scale.
+power() {
+    case "$1" in
+        low|*Haiku*)                  printf '%s' "$P1" ;;
+        medium)                       printf '%s' "$P2" ;;
+        high|*Sonnet*)                printf '%s' "$P3" ;;
+        xhigh)                        printf '%s' "$P4" ;;
+        max|ultracode|*Opus*|*Fable*) printf '%s' "$P5" ;;
+        *)                            printf '%s' "$RESET" ;;
     esac
 }
 
 if [ -n "$used" ]; then
     used_display=$(printf "%.0f" "$used")
-    used_color=$(get_color_pct "$used_display" 60 40)
-    usage_str="${used_color}${used_display}%${RESET}"
+    usage_str="$(sev "$used_display" "$CTX_WARN" "$CTX_CRIT")${used_display}%${RESET}"
 else
-    usage_str="0%"
+    usage_str="${DIM}--%${RESET}"
+fi
+
+if [ -n "$total_cost" ]; then
+    cost_display=$(awk "BEGIN { printf \"%.2f\", $total_cost }")
+    cost_whole=$(awk "BEGIN { printf \"%.0f\", $total_cost }")
+    cost_str="$(sev "$cost_whole" "$COST_WARN" "$COST_CRIT")\$${cost_display}${RESET}"
+else
+    cost_str="${DIM}\$--${RESET}"
 fi
 
 if [ -n "$worktree" ]; then
@@ -112,68 +112,34 @@ git_str=""
 if git rev-parse --git-dir > /dev/null 2>&1; then
     branch=$(git branch --show-current 2>/dev/null)
     [ -z "$branch" ] && branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
-    staged=$(git diff --cached --numstat 2>/dev/null | wc -l)
-    modified=$(git diff --numstat 2>/dev/null | wc -l)
+    # $(( )) strips the left padding macOS wc adds.
+    staged=$(($(git diff --cached --numstat 2>/dev/null | wc -l)))
+    modified=$(($(git diff --numstat 2>/dev/null | wc -l)))
 
     git_str="$branch"
-    [ "$staged" -gt 0 ] && git_str="${git_str} $(printf "${GREEN}+${staged}${RESET}")"
-    [ "$modified" -gt 0 ] && git_str="${git_str} $(printf "${YELLOW}~${modified}${RESET}")"
+    [ "$staged" -gt 0 ] && git_str="${git_str} ${OK}+${staged}${RESET}"
+    [ "$modified" -gt 0 ] && git_str="${git_str} ${WARN}~${modified}${RESET}"
 else
     git_str="no branch"
 fi
 
-if [ -n "$total_cost" ]; then
-    cost_display=$(awk "BEGIN { printf \"%.2f\", $total_cost }")
-    cost_whole=$(awk "BEGIN { printf \"%.0f\", $total_cost }")
-    cost_color=$(get_color_pct "$cost_whole" 30 10)
-    cost_str="${cost_color}\$${cost_display}${RESET}"
-else
-    cost_str="\$--"
-fi
-
-if [ -n "$total_input_tokens" ] && [ -n "$total_output_tokens" ] && [ -n "$total_duration_ms" ] && [ "$total_duration_ms" -gt 0 ]; then
-    total_tokens=$((total_input_tokens + total_output_tokens))
-    tok_rate=$(awk "BEGIN { printf \"%.0f\", $total_tokens / ($total_duration_ms / 1000) }")
-    if [ "$tok_rate" -gt 80 ]; then
-        rate_color="$GREEN"
-    elif [ "$tok_rate" -ge 60 ]; then
-        rate_color="$YELLOW"
-    else
-        rate_color="$RED"
-    fi
-    rate_str="${rate_color}${tok_rate} tok/s${RESET}"
-else
-    rate_str="-- tok/s"
-fi
-
+# format_rl PCT RESET_TS LABEL
 format_rl() {
     pct="$1"
     reset_ts="$2"
     label="$3"
 
-    now=$(date +%s)
-    remaining=$((reset_ts - now))
-
-    if [ -z "$pct" ] || [ "$remaining" -le 0 ]; then
-        printf "%s --%%" "$label"
+    if [ -z "$pct" ] || [ -z "$reset_ts" ] || [ "$reset_ts" -le "$now" ]; then
+        printf "%s%s --%%%s" "$DIM" "$label" "$RESET"
         return
     fi
 
     pct=$(printf "%.0f" "$pct")
-
-    if [ "$pct" -ge 80 ]; then
-        color="$RED"
-    elif [ "$pct" -ge 60 ]; then
-        color="$YELLOW"
-    else
-        color="$GREEN"
-    fi
-
-    reset_time=$(date -r "$reset_ts" "+%-I:%M%p")
+    remaining=$((reset_ts - now))
+    color=$(sev "$pct" "$LIMIT_WARN" "$LIMIT_CRIT")
 
     if [ "$label" = "7d" ]; then
-        day_time=$(date -r "$reset_ts" "+%a %-I:%M%p")
-        printf "${color}${label} ${pct}%% • ${day_time}${RESET}"
+        when=$(date -r "$reset_ts" "+%a %-I:%M%p")
     else
         hours=$((remaining / 3600))
         mins=$(((remaining % 3600) / 60))
@@ -182,35 +148,23 @@ format_rl() {
         else
             countdown="${mins}m"
         fi
-        printf "${color}${label} ${pct}%% • ${reset_time} (${countdown})${RESET}"
+        when="$(date -r "$reset_ts" "+%-I:%M%p") (${countdown})"
     fi
+    printf "%s%s %s%% • %s%s" "$color" "$label" "$pct" "$when" "$RESET"
 }
 
-rate_limit_5h=$(format_rl "$rl_5h_pct" "$rl_5h_reset" "5h")
-rate_limit_7d=$(format_rl "$rl_7d_pct" "$rl_7d_reset" "7d")
+rate_limit_str="$(format_rl "$rl_5h_pct" "$rl_5h_reset" "5h") | $(format_rl "$rl_7d_pct" "$rl_7d_reset" "7d")"
 
-if [ -n "$rate_limit_5h" ] && [ -n "$rate_limit_7d" ]; then
-    rate_limit_str="${rate_limit_5h} | ${rate_limit_7d}"
-elif [ -n "$rate_limit_5h" ]; then
-    rate_limit_str="$rate_limit_5h"
-else
-    rate_limit_str="$rate_limit_7d"
-fi
-
-repo_root=$(cd "$current_dir" 2>/dev/null && git rev-parse --show-toplevel 2>/dev/null || echo "$current_dir")
+repo_root=$(cd "${current_dir:-$PWD}" 2>/dev/null && git rev-parse --show-toplevel 2>/dev/null || echo "$current_dir")
 dir_display=$(basename "$repo_root")
 
-model_color=$(get_model_color "$model")
-effort_color=$(get_effort_color "$effort")
-model_str="${model_color}${model}${RESET}"
+model_str="$(power "$model")${model}${RESET}"
 
-if [ -n "$effort" ]; then
-    effort_str="${effort_color}${effort}${RESET}"
-    printf "🤖 %s | 💪 %s | 🧠 %s | 💰 %s | ⚡ %s | ⏱️ %s\n📁 %s | 🌳 %s | 🌿 %s" \
-        "$model_str" "$effort_str" "$usage_str" "$cost_str" "$rate_str" "$rate_limit_str" \
-        "$dir_display" "$worktree_str" "$git_str"
-else
-    printf "🤖 %s | 🧠 %s | 💰 %s | ⚡ %s | ⏱️ %s\n📁 %s | 🌳 %s | 🌿 %s" \
-        "$model_str" "$usage_str" "$cost_str" "$rate_str" "$rate_limit_str" \
-        "$dir_display" "$worktree_str" "$git_str"
-fi
+line1="🤖 ${model_str}"
+[ -n "$effort" ] && line1="${line1} | 💪 $(power "$effort")${effort}${RESET}"
+line1="${line1} | 🧠 ${usage_str} | 💰 ${cost_str}"
+line1="${line1} | ⏱️ ${rate_limit_str}"
+
+line2="📁 ${dir_display} | 🌳 ${worktree_str} | 🌿 ${git_str}"
+
+printf '%s\n%s' "$line1" "$line2"
