@@ -50,7 +50,7 @@ The statusline is configured in `config/settings.json`:
 📁 dotfiles | 🌳 no worktree | 🌿 main ↑1 ↓2 +1 ~2 ?3 | 🔀 #5 [review]
 ```
 
-Line 1 is the session (model and limits), line 2 is time and spend, line 3 is the repository. A segment Claude Code has not reported yet is either dim (`--%`, `$--`, `⚡ --`) or left out.
+Line 1 is the session (model and limits), line 2 is time and spend, line 3 is the repository. A segment Claude Code has not reported yet is either dim (`--%`, `$--`, `⚡ --`) or left out. Missing, null, empty or wrongly typed fields are treated the same way, and input that isn't JSON renders the placeholders instead of a blank line, so the statusline always prints its three lines.
 
 ### Colors
 

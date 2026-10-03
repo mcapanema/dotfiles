@@ -33,40 +33,51 @@ input=$(cat)
 [ -n "$input" ] || input='{}'
 
 # One jq pass; @sh quotes every value so eval is safe on arbitrary strings.
-# Absent/null fields become ''. Note `false // ""` is also '' in jq.
-vars=$(printf '%s' "$input" | jq -r '
-    @sh "model=\(.model.display_name // "Unknown Model")",
-    @sh "effort=\(.effort.level // "")",
-    @sh "fast=\(.fast_mode // "")",
-    @sh "vim_mode=\(.vim.mode // "")",
-    @sh "used=\(.context_window.used_percentage // "")",
-    @sh "ctx_size=\(.context_window.context_window_size // "")",
-    @sh "total_cost=\(.cost.total_cost_usd // "")",
-    @sh "duration_ms=\(.cost.total_duration_ms // "")",
-    @sh "session_id=\(.session_id // "")",
-    @sh "api_ms=\(.cost.total_api_duration_ms // "")",
-    @sh "out_tokens=\(.context_window.total_output_tokens // "")",
-    @sh "cache_warm=\(.prompt_cache.warm // "")",
-    @sh "cache_expires=\(.prompt_cache.expires_at // "")",
-    @sh "cache_hit=\(.prompt_cache.hit_ratio // "")",
-    @sh "cache_seen=\(.prompt_cache.caching_observed // "")",
-    @sh "miss_at=\(.prompt_cache.last_miss_at // "")",
-    @sh "miss_cause=\(.prompt_cache.last_miss_cause.causes // [] | map(
-        if startswith("ttl_expired") then "ttl"
-        elif . == "tools_changed" then "tools"
-        elif . == "system_prompt_changed" then "prompt"
-        elif . == "likely_server_side" then "server"
-        else . end) | unique | join(","))",
-    @sh "worktree=\(.worktree.name // "")",
-    @sh "current_dir=\(.worktree.original_cwd // .workspace.project_dir // .cwd // "")",
-    @sh "pr_number=\(.pr.number // "")",
-    @sh "pr_url=\(.pr.url // "")",
-    @sh "pr_state=\(.pr.review_state // "")",
-    @sh "rl_5h_pct=\(.rate_limits.five_hour.used_percentage // "")",
-    @sh "rl_5h_reset=\(.rate_limits.five_hour.resets_at // "")",
-    @sh "rl_7d_pct=\(.rate_limits.seven_day.used_percentage // "")",
-    @sh "rl_7d_reset=\(.rate_limits.seven_day.resets_at // "")"
-') || exit 0
+# Every field goes through a typed reader: missing, null, empty or wrongly
+# typed values (at any depth) become '' = "not reported", never an error.
+# shellcheck disable=SC2016  # $-free jq program, single quotes are intended
+JQ_PROG='
+    def get(f): try f catch null;
+    def str(f): get(f) | strings | select(. != "");
+    def num(f): get(f) | numbers;
+    def int(f): num(f) | floor;
+    def nat(f): int(f) | select(. >= 0);
+    def flag(f): if get(f) == true then "true" else "" end;
+    @sh "model=\(str(.model.display_name) // "Unknown Model")",
+    @sh "effort=\(str(.effort.level) // "")",
+    @sh "fast=\(flag(.fast_mode))",
+    @sh "vim_mode=\(str(.vim.mode) // "")",
+    @sh "used=\(num(.context_window.used_percentage) // "")",
+    @sh "ctx_size=\((int(.context_window.context_window_size) | select(. > 0)) // "")",
+    @sh "total_cost=\(num(.cost.total_cost_usd) // "")",
+    @sh "duration_ms=\(nat(.cost.total_duration_ms) // "")",
+    @sh "session_id=\(str(.session_id) // "")",
+    @sh "api_ms=\(nat(.cost.total_api_duration_ms) // "")",
+    @sh "out_tokens=\(nat(.context_window.total_output_tokens) // "")",
+    @sh "cache_warm=\(flag(.prompt_cache.warm))",
+    @sh "cache_expires=\(int(.prompt_cache.expires_at) // "")",
+    @sh "cache_hit=\(num(.prompt_cache.hit_ratio) // "")",
+    @sh "cache_seen=\(flag(.prompt_cache.caching_observed))",
+    @sh "miss_at=\(int(.prompt_cache.last_miss_at) // "")",
+    @sh "miss_cause=\([get(.prompt_cache.last_miss_cause.causes[]) | strings
+        | if startswith("ttl_expired") then "ttl"
+          elif . == "tools_changed" then "tools"
+          elif . == "system_prompt_changed" then "prompt"
+          elif . == "likely_server_side" then "server"
+          else . end] | unique | join(","))",
+    @sh "worktree=\(str(.worktree.name) // "")",
+    @sh "current_dir=\(str(.worktree.original_cwd) // str(.workspace.project_dir) // str(.cwd) // "")",
+    @sh "pr_number=\((int(.pr.number) | select(. > 0)) // "")",
+    @sh "pr_url=\(str(.pr.url) // "")",
+    @sh "pr_state=\(str(.pr.review_state) // "")",
+    @sh "rl_5h_pct=\(num(.rate_limits.five_hour.used_percentage) // "")",
+    @sh "rl_5h_reset=\(int(.rate_limits.five_hour.resets_at) // "")",
+    @sh "rl_7d_pct=\(num(.rate_limits.seven_day.used_percentage) // "")",
+    @sh "rl_7d_reset=\(int(.rate_limits.seven_day.resets_at) // "")"
+'
+# Input that is not JSON at all renders the "nothing reported" placeholders.
+vars=$(printf '%s' "$input" | jq -r "$JQ_PROG" 2>/dev/null) \
+    || vars=$(printf '{}' | jq -r "$JQ_PROG")
 eval "$vars"
 
 now=$(date +%s)
@@ -184,7 +195,6 @@ case "$session_id" in
     ""|*[!A-Za-z0-9_-]*) ;;
     *)
         if [ -n "$api_ms" ]; then
-            api_ms=${api_ms%.*}
             state="${TMPDIR:-/tmp}/claude-statusline-${session_id}"
             prev_api="" change_ts="" rate="-"
             if [ -f "$state" ]; then
@@ -201,7 +211,7 @@ case "$session_id" in
                 change_ts="$now" rate="-"
             elif [ "$api_ms" -gt "$prev_api" ]; then
                 change_ts="$now" rate="-"
-                [ -n "$out_tokens" ] && rate=$((${out_tokens%.*} * 1000 / (api_ms - prev_api)))
+                [ "${out_tokens:-0}" -gt 0 ] && rate=$((out_tokens * 1000 / (api_ms - prev_api)))
             fi
             if [ "$api_ms" != "$prev_api" ]; then
                 { printf '%s %s %s\n' "$api_ms" "$change_ts" "$rate" > "$state.$$" && mv -f "$state.$$" "$state"; } 2>/dev/null || true
@@ -223,7 +233,7 @@ esac
 
 # A recent miss re-billed the whole context; say why while it is still news.
 if [ -n "$cache_str" ] && [ -n "$miss_at" ]; then
-    miss_age=$((now - ${miss_at%.*}))
+    miss_age=$((now - miss_at))
     if [ "$miss_age" -ge 0 ] && [ "$miss_age" -lt "$MISS_RECENT" ]; then
         if [ "$miss_age" -lt 60 ]; then
             miss_when="now"
@@ -328,7 +338,7 @@ format_rl() {
 
 rate_limit_str="$(format_rl "$rl_5h_pct" "$rl_5h_reset" "5h" 18000) | $(format_rl "$rl_7d_pct" "$rl_7d_reset" "7d" 604800)"
 
-repo_root=$(cd "${current_dir:-$PWD}" 2>/dev/null && git rev-parse --show-toplevel 2>/dev/null || echo "$current_dir")
+repo_root=$(cd "${current_dir:-$PWD}" 2>/dev/null && git rev-parse --show-toplevel 2>/dev/null || echo "${current_dir:-$PWD}")
 dir_display=$(basename "$repo_root")
 
 model_str="$(power "$model")${model}${RESET}"
@@ -341,7 +351,7 @@ line1="🤖 ${model_str}"
 line1="${line1} | 🧠 ${usage_str} | ⏱️ ${rate_limit_str}"
 
 line2="💰 ${cost_str}"
-[ -n "$duration_ms" ] && line2="⌛ $(dur $((${duration_ms%.*} / 1000))) | ${line2}"
+[ -n "$duration_ms" ] && line2="⌛ $(dur $((duration_ms / 1000))) | ${line2}"
 [ -n "$cache_str" ] && line2="${line2} | 💾 ${cache_str}"
 [ -n "$speed_str" ] && line2="${line2} | ⚡ ${speed_str}"
 

@@ -251,6 +251,54 @@ l2=$(printf '%s\n' "$out" | sed -n 2p)
 has   layout-l2-empty   "$l2" "💰 ${DIM}\$--${RESET}"
 lacks layout-l2-no-lead "$l2" "| 💰"
 
+# --- empty and malformed state: every field, every bad value, still three lines ------------
+# Start from a payload that lights up every segment, then break one field at a time.
+full=$(jq -nc --argjson now "$now" '{
+    session_id: "fz", model: {display_name: "Opus 5.5"}, effort: {level: "max"},
+    fast_mode: true, vim: {mode: "INSERT"},
+    context_window: {used_percentage: 45, context_window_size: 1000000, total_output_tokens: 300},
+    cost: {total_cost_usd: 1.5, total_duration_ms: 60000, total_api_duration_ms: 30000},
+    prompt_cache: {warm: true, caching_observed: true, expires_at: ($now + 300), hit_ratio: 0.9,
+        last_miss_at: ($now - 60), last_miss_cause: {causes: ["tools_changed"]}},
+    worktree: {name: "w", original_cwd: "/tmp"}, workspace: {project_dir: "/tmp"}, cwd: "/tmp",
+    pr: {number: 5, url: "https://x/5", review_state: "approved"},
+    rate_limits: {five_hour: {used_percentage: 50, resets_at: ($now + 3600)},
+                  seven_day: {used_percentage: 20, resets_at: ($now + 86400)}}}')
+paths='model model.display_name effort.level fast_mode vim vim.mode context_window
+context_window.used_percentage context_window.context_window_size
+context_window.total_output_tokens cost cost.total_cost_usd cost.total_duration_ms
+cost.total_api_duration_ms session_id prompt_cache prompt_cache.warm prompt_cache.expires_at
+prompt_cache.hit_ratio prompt_cache.caching_observed prompt_cache.last_miss_at
+prompt_cache.last_miss_cause prompt_cache.last_miss_cause.causes worktree worktree.name
+worktree.original_cwd workspace workspace.project_dir cwd pr pr.number pr.url
+pr.review_state rate_limits rate_limits.five_hour rate_limits.five_hour.used_percentage
+rate_limits.five_hour.resets_at rate_limits.seven_day.used_percentage
+rate_limits.seven_day.resets_at'
+bad=0
+for path in $paths; do
+    for value in null '""' '"x"' 1.5 -1 0 '{}' '[]'; do
+        json=$(printf '%s' "$full" | jq -c --arg p "$path" --argjson v "$value" 'setpath($p | split("."); $v)')
+        res=$(printf '%s' "$json" | /bin/sh "$SCRIPT" 2>&1) && rc=0 || rc=$?
+        if [ "$rc" -ne 0 ] || [ "$(printf '%s\n' "$res" | wc -l)" -ne 3 ] \
+            || ! printf '%s\n' "$res" | sed -n 3p | grep -q '^📁 '; then
+            printf 'FAIL malformed %s=%s (rc=%s): %s\n' "$path" "$value" "$rc" \
+                "$(printf '%s' "$res" | grep -v '^\(🤖\|\[\|⌛\|💰\|📁\)' | head -1)"
+            bad=$((bad + 1))
+        fi
+    done
+done
+[ "$bad" -eq 0 ] || fails=$((fails + bad))
+# Whole-input garbage renders the placeholders, not a blank line.
+for doc in 'not json' '[]' 'null' '42' '{"model":'; do
+    res=$(printf '%s' "$doc" | /bin/sh "$SCRIPT" 2>&1) || true
+    has   "garbage-input:$doc" "$res" "${DIM}--%${RESET}"
+done
+out=$(render '{"model":{"display_name":""},"worktree":{"name":""}}')
+has   empty-string-model "$out" "Unknown Model"
+has   empty-string-tree  "$out" "🌳 no worktree"
+out=$(render '{"context_window":{"used_percentage":30,"context_window_size":0}}')
+has   ctx-size-zero      "$out" "${OK}30%${RESET} |"
+
 if [ "$fails" -gt 0 ]; then
     echo "$fails check(s) failed"
     exit 1
