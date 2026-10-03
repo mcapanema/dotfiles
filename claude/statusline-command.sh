@@ -32,6 +32,8 @@ export LC_NUMERIC=C
 vars=$(jq -r '
     @sh "model=\(.model.display_name // "Unknown Model")",
     @sh "effort=\(.effort.level // "")",
+    @sh "fast=\(.fast_mode // "")",
+    @sh "vim_mode=\(.vim.mode // "")",
     @sh "used=\(.context_window.used_percentage // "")",
     @sh "ctx_size=\(.context_window.context_window_size // "")",
     @sh "over_200k=\(.exceeds_200k_tokens // "")",
@@ -44,6 +46,9 @@ vars=$(jq -r '
     @sh "cache_seen=\(.prompt_cache.caching_observed // "")",
     @sh "worktree=\(.worktree.name // "")",
     @sh "current_dir=\(.worktree.original_cwd // .workspace.project_dir // .cwd // "")",
+    @sh "pr_number=\(.pr.number // "")",
+    @sh "pr_url=\(.pr.url // "")",
+    @sh "pr_state=\(.pr.review_state // "")",
     @sh "rl_5h_pct=\(.rate_limits.five_hour.used_percentage // "")",
     @sh "rl_5h_reset=\(.rate_limits.five_hour.resets_at // "")",
     @sh "rl_7d_pct=\(.rate_limits.seven_day.used_percentage // "")",
@@ -162,6 +167,20 @@ if [ -n "$lines_added" ] && [ -n "$lines_removed" ] && [ "$((lines_added + lines
     churn_str="+${lines_added} -${lines_removed}"
 fi
 
+pr_str=""
+if [ -n "$pr_number" ]; then
+    case "$pr_state" in
+        approved)          pr_color="$OK";   pr_mark=" ✓" ;;
+        changes_requested) pr_color="$CRIT"; pr_mark=" ✗" ;;
+        pending)           pr_color="$WARN"; pr_mark=" …" ;;
+        draft)             pr_color="$DIM";  pr_mark=" draft" ;;
+        *)                 pr_color="";      pr_mark="" ;;
+    esac
+    pr_str="${pr_color}#${pr_number}${pr_mark}${RESET}"
+    # OSC 8 hyperlink: Cmd+click opens the PR.
+    [ -n "$pr_url" ] && pr_str="${ESC}]8;;${pr_url}${ESC}\\${pr_str}${ESC}]8;;${ESC}\\"
+fi
+
 # format_rl PCT RESET_TS LABEL WINDOW_SECONDS
 format_rl() {
     pct="$1"
@@ -214,8 +233,10 @@ repo_root=$(cd "${current_dir:-$PWD}" 2>/dev/null && git rev-parse --show-toplev
 dir_display=$(basename "$repo_root")
 
 model_str="$(power "$model")${model}${RESET}"
+[ "$fast" = "true" ] && model_str="${model_str} ${P5}fast${RESET}"
 
 line1="🤖 ${model_str}"
+[ -n "$vim_mode" ] && line1="[$(printf '%.1s' "$vim_mode")] ${line1}"
 [ -n "$effort" ] && line1="${line1} | 💪 $(power "$effort")${effort}${RESET}"
 line1="${line1} | 🧠 ${usage_str} | 💰 ${cost_str}"
 [ -n "$cache_str" ] && line1="${line1} | 💾 ${cache_str}"
@@ -223,5 +244,6 @@ line1="${line1} | ⏱️ ${rate_limit_str}"
 
 line2="📁 ${dir_display} | 🌳 ${worktree_str} | 🌿 ${git_str}"
 [ -n "$churn_str" ] && line2="${line2} | 📝 ${churn_str}"
+[ -n "$pr_str" ] && line2="${line2} | 🔀 ${pr_str}"
 
 printf '%s\n%s' "$line1" "$line2"

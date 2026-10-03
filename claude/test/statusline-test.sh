@@ -125,6 +125,20 @@ has   cache-cold        "$out" "💾 ${WARN}cold${RESET} 40% hit"
 out=$(render '{"prompt_cache":{"warm":false,"caching_observed":false,"expires_at":null,"hit_ratio":null}}')
 lacks cache-unused      "$out" "💾"
 
+# --- PR, fast mode, vim mode ----------------------------------------------------------
+out=$(render '{"pr":{"number":12,"url":"https://github.com/o/r/pull/12","review_state":"approved"},"vim":{"mode":"INSERT"},"fast_mode":true}')
+has   pr-approved       "$out" "${OK}#12 ✓${RESET}"
+has   pr-link           "$out" "${ESC}]8;;https://github.com/o/r/pull/12${ESC}\\"
+has   vim-insert        "$out" "[I] 🤖"
+has   fast-tag          "$out" "${P5}fast${RESET}"
+out=$(render '{"pr":{"number":7,"review_state":"changes_requested"},"fast_mode":false}')
+has   pr-changes        "$out" "${CRIT}#7 ✗${RESET}"
+lacks pr-no-link        "$out" "]8;;"
+lacks fast-off          "$out" "fast"
+out=$(render '{}')
+lacks pr-absent         "$out" "🔀"
+lacks vim-absent        "$out" "] 🤖"
+
 if [ "$fails" -gt 0 ]; then
     echo "$fails check(s) failed"
     exit 1
