@@ -47,7 +47,7 @@ fresh-install and update paths.
 │   ├── statusline-command.sh    # Statusline renderer
 │   ├── config/settings.json     # API settings
 │   ├── templates/.zshenv       # chezmoi template for API config (conditional source in .zshenv)
-│   └── test/                    # Internal test fixtures (do not ship)
+│   └── test/                    # Statusline fixture + regression checks (statusline-test.sh)
 ├── devtools/                    # Development toolchains installer
 │   ├── install.sh               # VSCode + Node/nvm + Ruby/rvm + Python/uv/pipx + Rust/rustup
 │   └── vscode/settings.json    # Managed VSCode user settings (symlinked into ~/Library/Application Support/Code/User/)
@@ -520,7 +520,8 @@ End-to-end flow:
 | File | Role |
 |---|---|
 | `claude/install.sh` | Bootstrap: installs Claude Code CLI, sets up config directory, applies settings.json |
-| `claude/statusline-command.sh` | Renders the Claude Code statusline prompt |
+| `claude/statusline-command.sh` | Renders the Claude Code statusline prompt (color contract in its header comment: severity OK/WARN/CRIT vs power P1..P5) |
+| `claude/test/statusline-test.sh` | Regression checks for the statusline; run after every edit to the script |
 | `claude/config/settings.json` | Claude Code API settings |
 | `claude/templates/.zshenv` | chezmoi template for API config; conditional source in `dotfiles/.zshenv` |
 
@@ -678,6 +679,12 @@ brew_install_if_missing ShellCheck shellcheck
 shellcheck install.sh lib/common.sh lib/bootstrap.sh lib/brew-packages.sh lib/nvim.sh \
            macos/apply-settings.sh iterm2/apply-iterm.sh claude/install.sh \
            devtools/install.sh setup-ai-tools.sh
+```
+
+After any change to `claude/statusline-command.sh`:
+
+```sh
+sh claude/test/statusline-test.sh
 ```
 
 After any change to `iterm2/com.googlecode.iterm2.plist.export`:
