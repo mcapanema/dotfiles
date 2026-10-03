@@ -79,7 +79,7 @@ P5="${ESC}[38;5;201m"  # magenta
 CTX_WARN=40;   CTX_CRIT=60    # % of context window; quality drops well before auto-compact
 COST_WARN=10;  COST_CRIT=30   # session USD
 LIMIT_WARN=60; LIMIT_CRIT=80  # % of a rate-limit window used so far
-PACE_WARN=80;  PACE_CRIT=100  # % of a rate-limit window projected at its reset
+PACE_WARN=80;  PACE_CRIT=100  # burn rate x100 (used% / elapsed%); 100 = lands exactly on the cap
 HIT_WARN=80;   HIT_CRIT=50    # prompt cache hit %; lower is worse (see sev_low)
 
 # sev VALUE WARN CRIT -> severity color for an integer where higher is worse.
@@ -104,11 +104,9 @@ sev_low() {
     fi
 }
 
-# dur SECONDS -> 2d3h / 4h9m / 29m
+# dur SECONDS -> 4h9m / 29m
 dur() {
-    if [ "$1" -ge 86400 ]; then
-        printf '%sd%sh' $(($1 / 86400)) $((($1 % 86400) / 3600))
-    elif [ "$1" -ge 3600 ]; then
+    if [ "$1" -ge 3600 ]; then
         printf '%sh%sm' $(($1 / 3600)) $((($1 % 3600) / 60))
     else
         printf '%sm' $(($1 / 60))
@@ -161,7 +159,7 @@ elif [ "$cache_seen" = "true" ]; then
 fi
 if [ -n "$cache_str" ] && [ -n "$cache_hit" ]; then
     hit=$(awk "BEGIN { printf \"%.0f\", $cache_hit * 100 }")
-    cache_str="${cache_str} | $(sev_low "$hit" "$HIT_WARN" "$HIT_CRIT")${hit}% hit${RESET}"
+    cache_str="${cache_str} • $(sev_low "$hit" "$HIT_WARN" "$HIT_CRIT")${hit}% hit${RESET}"
 fi
 
 if [ -n "$worktree" ]; then
@@ -220,18 +218,20 @@ format_rl() {
     remaining=$((reset_ts - now))
     elapsed=$((window - remaining))
 
-    # Pace: linear projection to reset, colored apart from usage. Skipped in
-    # the first 10% of the window (one burst would extrapolate to nonsense)
-    # and once already capped.
-    pace=""
-    if [ "$pct" -gt 0 ] && [ "$pct" -lt 100 ] && [ $((elapsed * 10)) -ge "$window" ]; then
-        projected=$((pct * window / elapsed))
-        if [ "$projected" -ge "$PACE_CRIT" ]; then
-            # Time until 100% at the current rate.
-            pace=" ${CRIT}⚠$(dur $((elapsed * (100 - pct) / pct)))${RESET}"
-        elif [ "$projected" -ge "$PACE_WARN" ]; then
-            pace=" ${WARN}→${projected}%${RESET}"
+    # Burn multiplier: used% / elapsed% of the window. x1.0 lands exactly on
+    # the cap at reset. DIM in the first 10% of the window, where one burst
+    # would extrapolate to nonsense; x-- when the clock makes it uncomputable.
+    if [ "$elapsed" -le 0 ]; then
+        pace="${DIM}×--${RESET}"
+    else
+        rate=$((pct * window / elapsed))
+        tenths=$(((pct * window + elapsed * 5) / (elapsed * 10)))
+        if [ $((elapsed * 10)) -lt "$window" ]; then
+            pace_color="$DIM"
+        else
+            pace_color=$(sev "$rate" "$PACE_WARN" "$PACE_CRIT")
         fi
+        pace="${pace_color}×$((tenths / 10)).$((tenths % 10))${RESET}"
     fi
 
     if [ "$label" = "7d" ]; then
@@ -239,7 +239,7 @@ format_rl() {
     else
         when="$(date -r "$reset_ts" "+%-I:%M%p") ($(dur "$remaining"))"
     fi
-    printf "%s%s %s%%%s%s • %s" "$(sev "$pct" "$LIMIT_WARN" "$LIMIT_CRIT")" "$label" "$pct" "$RESET" "$pace" "$when"
+    printf "%s%s %s%%%s • %s • %s" "$(sev "$pct" "$LIMIT_WARN" "$LIMIT_CRIT")" "$label" "$pct" "$RESET" "$pace" "$when"
 }
 
 rate_limit_str="$(format_rl "$rl_5h_pct" "$rl_5h_reset" "5h" 18000) | $(format_rl "$rl_7d_pct" "$rl_7d_reset" "7d" 604800)"
