@@ -2,6 +2,8 @@
   "statusLine": {
     "type": "command",
     "command": "sh ~/.claude/statusline-command.sh",
-    "padding": 0
+    "padding": 0,
+    "refreshInterval": 30,
+    "hideVimModeIndicator": true
   }
 }

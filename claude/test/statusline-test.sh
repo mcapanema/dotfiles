@@ -139,6 +139,11 @@ out=$(render '{}')
 lacks pr-absent         "$out" "🔀"
 lacks vim-absent        "$out" "] 🤖"
 
+# --- settings: time-based segments refresh while idle; vim mode shown once ---------------
+settings=$(jq -c '.statusLine | {refreshInterval, hideVimModeIndicator}' "$DIR/../config/settings.json")
+has   settings-refresh  "$settings" '"refreshInterval":30'
+has   settings-vim-once "$settings" '"hideVimModeIndicator":true'
+
 if [ "$fails" -gt 0 ]; then
     echo "$fails check(s) failed"
     exit 1
