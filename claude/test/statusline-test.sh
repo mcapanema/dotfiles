@@ -153,6 +153,17 @@ out=$(render "{\"prompt_cache\":{\"warm\":true,\"caching_observed\":true,\"expir
 has   cache-hit-warn    "$out" "• ${WARN}70% hit${RESET}"
 out=$(render '{"prompt_cache":{"warm":false,"caching_observed":false,"expires_at":null,"hit_ratio":null}}')
 lacks cache-unused      "$out" "💾"
+# Recent miss (< 10m): cause + age in WARN. last_miss_at carries a 10s pad.
+out=$(render "{\"prompt_cache\":{\"warm\":true,\"caching_observed\":true,\"expires_at\":$((now + 270)),\"hit_ratio\":0.92,\"last_miss_at\":$((now - 130)),\"last_miss_cause\":{\"causes\":[\"tools_changed\"]}}}")
+has   miss-recent       "$out" "💾 ${OK}5m${RESET} • ${OK}92% hit${RESET} • ${WARN}✗ tools 2m ago${RESET}"
+out=$(render "{\"prompt_cache\":{\"warm\":true,\"caching_observed\":true,\"expires_at\":$((now + 270)),\"last_miss_at\":$((now - 5)),\"last_miss_cause\":{\"causes\":[\"ttl_expired_5m\",\"system_prompt_changed\",\"likely_server_side\"]}}}")
+has   miss-causes       "$out" "${WARN}✗ prompt,server,ttl now${RESET}"
+out=$(render "{\"prompt_cache\":{\"warm\":true,\"caching_observed\":true,\"expires_at\":$((now + 270)),\"last_miss_at\":$((now - 60)),\"last_miss_cause\":{\"causes\":[\"new_cause_x\"]}}}")
+has   miss-unknown      "$out" "✗ new_cause_x 1m ago"
+out=$(render "{\"prompt_cache\":{\"warm\":true,\"caching_observed\":true,\"expires_at\":$((now + 270)),\"last_miss_at\":$((now - 60))}}")
+has   miss-no-cause     "$out" "✗ miss 1m ago"
+out=$(render "{\"prompt_cache\":{\"warm\":true,\"caching_observed\":true,\"expires_at\":$((now + 270)),\"last_miss_at\":$((now - 900)),\"last_miss_cause\":{\"causes\":[\"tools_changed\"]}}}")
+lacks miss-old          "$out" "✗"
 
 # --- PR, fast mode, vim mode ----------------------------------------------------------
 out=$(render '{"pr":{"number":12,"url":"https://github.com/o/r/pull/12","review_state":"approved"},"vim":{"mode":"INSERT"},"fast_mode":true}')
@@ -175,9 +186,25 @@ has   settings-vim-once "$settings" '"hideVimModeIndicator":true'
 
 # --- session duration --------------------------------------------------------------------------
 out=$(render '{"cost":{"total_cost_usd":0.5,"total_duration_ms":4320000}}')
-has   duration          "$out" "💰 ${OK}\$0.50${RESET} | ⌛ 1h12m"
+has   duration          "$out" "⌛ 1h12m | 💰 ${OK}\$0.50${RESET}"
 out=$(render '{}')
 lacks duration-absent   "$out" "⌛"
+
+# --- layout: 1 session, 2 time/cost/cache, 3 repository ------------------------------------
+out=$(render "$(cat "$DIR/sample-claude-status.json")")
+l1=$(printf '%s\n' "$out" | sed -n 1p)
+l2=$(printf '%s\n' "$out" | sed -n 2p)
+l3=$(printf '%s\n' "$out" | sed -n 3p)
+has   layout-l1-model   "$l1" "🤖 "
+has   layout-l1-limits  "$l1" "⏱️ "
+lacks layout-l1-no-cost "$l1" "💰"
+has   layout-l2-start   "$l2" "⌛ 3m | 💰 "
+has   layout-l3-start   "$l3" "📁 "
+lacks layout-no-4th     "$(printf '%s\n' "$out" | sed -n 4p)" "📁"
+out=$(render '{}')
+l2=$(printf '%s\n' "$out" | sed -n 2p)
+has   layout-l2-empty   "$l2" "💰 ${DIM}\$--${RESET}"
+lacks layout-l2-no-lead "$l2" "| 💰"
 
 if [ "$fails" -gt 0 ]; then
     echo "$fails check(s) failed"

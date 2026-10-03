@@ -46,6 +46,13 @@ vars=$(printf '%s' "$input" | jq -r '
     @sh "cache_expires=\(.prompt_cache.expires_at // "")",
     @sh "cache_hit=\(.prompt_cache.hit_ratio // "")",
     @sh "cache_seen=\(.prompt_cache.caching_observed // "")",
+    @sh "miss_at=\(.prompt_cache.last_miss_at // "")",
+    @sh "miss_cause=\(.prompt_cache.last_miss_cause.causes // [] | map(
+        if startswith("ttl_expired") then "ttl"
+        elif . == "tools_changed" then "tools"
+        elif . == "system_prompt_changed" then "prompt"
+        elif . == "likely_server_side" then "server"
+        else . end) | unique | join(","))",
     @sh "worktree=\(.worktree.name // "")",
     @sh "current_dir=\(.worktree.original_cwd // .workspace.project_dir // .cwd // "")",
     @sh "pr_number=\(.pr.number // "")",
@@ -80,6 +87,7 @@ COST_WARN=10;  COST_CRIT=30   # session USD
 LIMIT_WARN=60; LIMIT_CRIT=80  # % of a rate-limit window used so far
 PACE_WARN=80;  PACE_CRIT=100  # burn rate x100 (used% / elapsed%); 100 = lands exactly on the cap
 HIT_WARN=80;   HIT_CRIT=50    # prompt cache hit %; lower is worse (see sev_low)
+MISS_RECENT=600               # seconds a cache miss stays on screen
 
 # sev VALUE WARN CRIT -> severity color for an integer where higher is worse.
 sev() {
@@ -159,6 +167,18 @@ fi
 if [ -n "$cache_str" ] && [ -n "$cache_hit" ]; then
     hit=$(awk "BEGIN { printf \"%.0f\", $cache_hit * 100 }")
     cache_str="${cache_str} • $(sev_low "$hit" "$HIT_WARN" "$HIT_CRIT")${hit}% hit${RESET}"
+fi
+# A recent miss re-billed the whole context; say why while it is still news.
+if [ -n "$cache_str" ] && [ -n "$miss_at" ]; then
+    miss_age=$((now - ${miss_at%.*}))
+    if [ "$miss_age" -ge 0 ] && [ "$miss_age" -lt "$MISS_RECENT" ]; then
+        if [ "$miss_age" -lt 60 ]; then
+            miss_when="now"
+        else
+            miss_when="$(dur "$miss_age") ago"
+        fi
+        cache_str="${cache_str} • ${WARN}✗ ${miss_cause:-miss} ${miss_when}${RESET}"
+    fi
 fi
 
 if [ -n "$worktree" ]; then
@@ -261,15 +281,17 @@ dir_display=$(basename "$repo_root")
 model_str="$(power "$model")${model}${RESET}"
 [ "$fast" = "true" ] && model_str="${model_str} ${P5}fast${RESET}"
 
+# Line 1: session. Line 2: time, cost, cache. Line 3: repository.
 line1="🤖 ${model_str}"
 [ -n "$vim_mode" ] && line1="[$(printf '%.1s' "$vim_mode")] ${line1}"
 [ -n "$effort" ] && line1="${line1} | 💪 $(power "$effort")${effort}${RESET}"
-line1="${line1} | 🧠 ${usage_str} | 💰 ${cost_str}"
-[ -n "$duration_ms" ] && line1="${line1} | ⌛ $(dur $((${duration_ms%.*} / 1000)))"
-[ -n "$cache_str" ] && line1="${line1} | 💾 ${cache_str}"
-line1="${line1} | ⏱️ ${rate_limit_str}"
+line1="${line1} | 🧠 ${usage_str} | ⏱️ ${rate_limit_str}"
 
-line2="📁 ${dir_display} | 🌳 ${worktree_str} | 🌿 ${git_str}"
-[ -n "$pr_str" ] && line2="${line2} | 🔀 ${pr_str}"
+line2="💰 ${cost_str}"
+[ -n "$duration_ms" ] && line2="⌛ $(dur $((${duration_ms%.*} / 1000))) | ${line2}"
+[ -n "$cache_str" ] && line2="${line2} | 💾 ${cache_str}"
 
-printf '%s\n%s' "$line1" "$line2"
+line3="📁 ${dir_display} | 🌳 ${worktree_str} | 🌿 ${git_str}"
+[ -n "$pr_str" ] && line3="${line3} | 🔀 ${pr_str}"
+
+printf '%s\n%s\n%s' "$line1" "$line2" "$line3"
