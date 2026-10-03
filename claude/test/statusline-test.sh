@@ -91,6 +91,22 @@ git -C "$tmp" add f
 out=$(cd "$tmp" && render '{}')
 has   git-staged        "$out" "${OK}+1${RESET}"
 
+# --- pace-aware rate limits -------------------------------------------------------
+# Remaining times carry a 15s pad so a slow run cannot shift the integer projection.
+out=$(render "{\"rate_limits\":{
+    \"five_hour\":{\"used_percentage\":60,\"resets_at\":$((now + 10815))},
+    \"seven_day\":{\"used_percentage\":10,\"resets_at\":$((now + 518415))}}}")
+has   pace-5h-crit      "$out" "${CRIT}5h 60% →150% •"
+has   pace-7d-ok        "$out" "${OK}7d 10% •"
+lacks pace-7d-no-arrow  "$out" "7d 10% →"
+out=$(render "{\"rate_limits\":{\"five_hour\":{\"used_percentage\":5,\"resets_at\":$((now + 17015))}}}")
+has   pace-early-raw    "$out" "${OK}5h 5% •"
+out=$(render "{\"rate_limits\":{\"five_hour\":{\"used_percentage\":85,\"resets_at\":$((now + 700))}}}")
+has   pace-late-warn    "$out" "${WARN}5h 85% →88% •"
+# Clock skew: reset further away than the window itself -> no projection.
+out=$(render "{\"rate_limits\":{\"five_hour\":{\"used_percentage\":30,\"resets_at\":$((now + 20000))}}}")
+has   pace-skew-raw     "$out" "${OK}5h 30% •"
+
 if [ "$fails" -gt 0 ]; then
     echo "$fails check(s) failed"
     exit 1

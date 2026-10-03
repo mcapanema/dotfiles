@@ -62,7 +62,7 @@ P5="${ESC}[38;5;201m"  # magenta
 # Severity thresholds (warn, crit). Tune here; every gauge reads these.
 CTX_WARN=40;   CTX_CRIT=60    # % of context window; quality drops well before auto-compact
 COST_WARN=10;  COST_CRIT=30   # session USD
-LIMIT_WARN=60; LIMIT_CRIT=80  # % of a rate-limit window used
+LIMIT_WARN=80; LIMIT_CRIT=100 # % of a rate-limit window, projected to its reset
 
 # sev VALUE WARN CRIT -> severity color for an integer where higher is worse.
 sev() {
@@ -123,11 +123,12 @@ else
     git_str="no branch"
 fi
 
-# format_rl PCT RESET_TS LABEL
+# format_rl PCT RESET_TS LABEL WINDOW_SECONDS
 format_rl() {
     pct="$1"
     reset_ts="$2"
     label="$3"
+    window="$4"
 
     if [ -z "$pct" ] || [ -z "$reset_ts" ] || [ "$reset_ts" -le "$now" ]; then
         printf "%s%s --%%%s" "$DIM" "$label" "$RESET"
@@ -136,7 +137,22 @@ format_rl() {
 
     pct=$(printf "%.0f" "$pct")
     remaining=$((reset_ts - now))
-    color=$(sev "$pct" "$LIMIT_WARN" "$LIMIT_CRIT")
+    elapsed=$((window - remaining))
+
+    # Linear projection to reset. Skipped in the first 10% of the window,
+    # where one burst would extrapolate to nonsense.
+    projected="$pct"
+    if [ $((elapsed * 10)) -ge "$window" ]; then
+        projected=$((pct * window / elapsed))
+    fi
+    worst="$pct"
+    [ "$projected" -gt "$worst" ] && worst="$projected"
+    color=$(sev "$worst" "$LIMIT_WARN" "$LIMIT_CRIT")
+
+    pace=""
+    if [ "$projected" -gt "$pct" ] && [ "$projected" -ge "$LIMIT_WARN" ]; then
+        pace=" →${projected}%"
+    fi
 
     if [ "$label" = "7d" ]; then
         when=$(date -r "$reset_ts" "+%a %-I:%M%p")
@@ -150,10 +166,10 @@ format_rl() {
         fi
         when="$(date -r "$reset_ts" "+%-I:%M%p") (${countdown})"
     fi
-    printf "%s%s %s%% • %s%s" "$color" "$label" "$pct" "$when" "$RESET"
+    printf "%s%s %s%%%s • %s%s" "$color" "$label" "$pct" "$pace" "$when" "$RESET"
 }
 
-rate_limit_str="$(format_rl "$rl_5h_pct" "$rl_5h_reset" "5h") | $(format_rl "$rl_7d_pct" "$rl_7d_reset" "7d")"
+rate_limit_str="$(format_rl "$rl_5h_pct" "$rl_5h_reset" "5h" 18000) | $(format_rl "$rl_7d_pct" "$rl_7d_reset" "7d" 604800)"
 
 repo_root=$(cd "${current_dir:-$PWD}" 2>/dev/null && git rev-parse --show-toplevel 2>/dev/null || echo "$current_dir")
 dir_display=$(basename "$repo_root")
