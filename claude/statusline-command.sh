@@ -33,7 +33,11 @@ vars=$(jq -r '
     @sh "model=\(.model.display_name // "Unknown Model")",
     @sh "effort=\(.effort.level // "")",
     @sh "used=\(.context_window.used_percentage // "")",
+    @sh "ctx_size=\(.context_window.context_window_size // "")",
+    @sh "over_200k=\(.exceeds_200k_tokens // "")",
     @sh "total_cost=\(.cost.total_cost_usd // "")",
+    @sh "lines_added=\(.cost.total_lines_added // "")",
+    @sh "lines_removed=\(.cost.total_lines_removed // "")",
     @sh "worktree=\(.worktree.name // "")",
     @sh "current_dir=\(.worktree.original_cwd // .workspace.project_dir // .cwd // "")",
     @sh "rl_5h_pct=\(.rate_limits.five_hour.used_percentage // "")",
@@ -94,6 +98,21 @@ else
     usage_str="${DIM}--%${RESET}"
 fi
 
+if [ -n "$ctx_size" ]; then
+    if [ "$ctx_size" -ge 1000000 ]; then
+        size_display="$((ctx_size / 1000000))M"
+    else
+        size_display="$((ctx_size / 1000))k"
+    fi
+    # Past 200k input tokens every request bills at the long-context premium.
+    if [ "$over_200k" = "true" ]; then
+        size_color="$CRIT"
+    else
+        size_color="$DIM"
+    fi
+    usage_str="${usage_str}${size_color}/${size_display}${RESET}"
+fi
+
 if [ -n "$total_cost" ]; then
     cost_display=$(awk "BEGIN { printf \"%.2f\", $total_cost }")
     cost_whole=$(awk "BEGIN { printf \"%.0f\", $total_cost }")
@@ -121,6 +140,11 @@ if git rev-parse --git-dir > /dev/null 2>&1; then
     [ "$modified" -gt 0 ] && git_str="${git_str} ${WARN}~${modified}${RESET}"
 else
     git_str="no branch"
+fi
+
+churn_str=""
+if [ -n "$lines_added" ] && [ -n "$lines_removed" ] && [ "$((lines_added + lines_removed))" -gt 0 ]; then
+    churn_str="+${lines_added} -${lines_removed}"
 fi
 
 # format_rl PCT RESET_TS LABEL WINDOW_SECONDS
@@ -182,5 +206,6 @@ line1="${line1} | 🧠 ${usage_str} | 💰 ${cost_str}"
 line1="${line1} | ⏱️ ${rate_limit_str}"
 
 line2="📁 ${dir_display} | 🌳 ${worktree_str} | 🌿 ${git_str}"
+[ -n "$churn_str" ] && line2="${line2} | 📝 ${churn_str}"
 
 printf '%s\n%s' "$line1" "$line2"
