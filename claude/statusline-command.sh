@@ -41,8 +41,6 @@ vars=$(printf '%s' "$input" | jq -r '
     @sh "used=\(.context_window.used_percentage // "")",
     @sh "ctx_size=\(.context_window.context_window_size // "")",
     @sh "total_cost=\(.cost.total_cost_usd // "")",
-    @sh "lines_added=\(.cost.total_lines_added // "")",
-    @sh "lines_removed=\(.cost.total_lines_removed // "")",
     @sh "cache_warm=\(.prompt_cache.warm // "")",
     @sh "cache_expires=\(.prompt_cache.expires_at // "")",
     @sh "cache_hit=\(.prompt_cache.hit_ratio // "")",
@@ -183,11 +181,6 @@ else
     git_str="no branch"
 fi
 
-churn_str=""
-if [ -n "$lines_added" ] && [ -n "$lines_removed" ] && [ "$((lines_added + lines_removed))" -gt 0 ]; then
-    churn_str="+${lines_added} -${lines_removed}"
-fi
-
 pr_str=""
 if [ -n "$pr_number" ]; then
     case "$pr_state" in
@@ -258,7 +251,6 @@ line1="${line1} | 🧠 ${usage_str} | 💰 ${cost_str}"
 line1="${line1} | ⏱️ ${rate_limit_str}"
 
 line2="📁 ${dir_display} | 🌳 ${worktree_str} | 🌿 ${git_str}"
-[ -n "$churn_str" ] && line2="${line2} | 📝 ${churn_str}"
 [ -n "$pr_str" ] && line2="${line2} | 🔀 ${pr_str}"
 
 printf '%s\n%s' "$line1" "$line2"

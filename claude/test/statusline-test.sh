@@ -120,16 +120,14 @@ out=$(render "{\"rate_limits\":{\"five_hour\":{\"used_percentage\":100,\"resets_
 has   pace-capped       "$out" "${CRIT}5h 100%${RESET} • ${CRIT}×1.3${RESET} •"
 lacks pace-no-warn-sign "$out" "⚠"
 
-# --- context size (always dim: a label, not a gauge), session churn --------------------
+# --- context size (always dim: a label, not a gauge); no session churn segment ---------
 out=$(render "$(cat "$DIR/sample-claude-status.json")")
 has   fixture-ctx-size  "$out" "${CRIT}62%${RESET}${DIM}/200k${RESET}"
-has   fixture-churn     "$out" "📝 +342 -28"
+lacks fixture-no-churn  "$out" "📝"
 out=$(render '{"context_window":{"used_percentage":30,"context_window_size":1000000},"exceeds_200k_tokens":true}')
 has   ctx-1m-dim        "$out" "${OK}30%${RESET}${DIM}/1M${RESET}"
 out=$(render '{"context_window":{"used_percentage":null,"context_window_size":200000}}')
 has   ctx-size-no-pct   "$out" "${DIM}--%${RESET}${DIM}/200k${RESET}"
-out=$(render '{"cost":{"total_lines_added":0,"total_lines_removed":0}}')
-lacks churn-zero        "$out" "📝"
 
 # --- prompt cache --------------------------------------------------------------------
 # expires_at carries a 30s pad so a slow run still rounds up to 5m.
