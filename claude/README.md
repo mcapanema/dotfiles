@@ -117,11 +117,12 @@ Most gauges are "higher is worse". Two are reversed, "lower is worse": cache hit
 Claude Code does not report a live speed, so the script compares each refresh with the previous one, keeping one small state file per session in `$TMPDIR`.
 
 - When the session's total API time grows, a response just finished: **tok/s** = that response's output tokens ÷ the API time added since the previous refresh, and **ago** restarts at 0s.
+- Responses under 200 output tokens (mostly tool calls) restart **ago** but keep the previous tok/s. Their API time is mostly the wait before the first token, so they would read as slow (often red) while things are moving fine.
 - While nothing new arrives, the 30s refresh keeps the speed and lets **ago** grow. If you're waiting on Claude and it keeps growing, the request is slow or stuck.
 - tok/s is green from 20, yellow below 20, red below 10. The age is always dim. The first refresh of a session shows `⚡ --`.
 
 It's an approximation:
-- The API time includes the wait before the first token, so short responses (tool calls) and large contexts read slower than the model actually generates.
+- The API time includes the wait before the first token, so large contexts read slower than the model actually generates. Short responses are skipped for this reason (see above).
 - If one refresh covers several API calls (fast tool loops, possibly subagents), the time adds up but only the last response's tokens count, so it reads slower.
 - Parallel sessions are independent (the state file is named after the session id). The same session open in two terminals shares the file and gives noisy readings.
 
@@ -138,6 +139,7 @@ All thresholds are named settings near the top of `statusline-command.sh`:
 | `HIT_WARN` / `HIT_CRIT` | 80 / 50 | cache hit % (lower is worse) |
 | `MISS_RECENT` | 600 | seconds a cache miss stays on screen |
 | `SPEED_WARN` / `SPEED_CRIT` | 20 / 10 | tok/s (lower is worse) |
+| `SPEED_MIN_TOKENS` | 200 | responses smaller than this don't update tok/s |
 
 ### Testing
 

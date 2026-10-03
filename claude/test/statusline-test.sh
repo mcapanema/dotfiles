@@ -127,10 +127,19 @@ has   speed-timer-keeps "$out" "${OK}40 tok/s${RESET}"
 echo "15000 $((now - 200)) 40" > "$tmp/claude-statusline-s1"
 out=$(speed 15000 200)
 has   speed-stuck-age   "$out" "${OK}40 tok/s${RESET} • ${DIM}3m ago${RESET}"
-out=$(speed 25000 150)
+out=$(speed 35000 300)
 has   speed-warn        "$out" "${WARN}15 tok/s${RESET}"
-out=$(speed 35000 50)
-has   speed-crit        "$out" "${CRIT}5 tok/s${RESET}"
+out=$(speed 85000 400)
+has   speed-crit        "$out" "${CRIT}8 tok/s${RESET}"
+# A small response (tool call, < SPEED_MIN_TOKENS) restarts "ago" but keeps the
+# last real speed: its API time is mostly the wait before the first token.
+echo "85000 $((now - 200)) 8" > "$tmp/claude-statusline-s1"
+out=$(speed 86000 50)
+has   speed-small-keeps "$out" "${CRIT}8 tok/s${RESET} • ${DIM}"
+lacks speed-small-age   "$out" "3m ago"
+out=$(speed 1000 300 s2)
+out=$(speed 2000 50 s2)
+has   speed-small-first "$out" "⚡ ${DIM}--${RESET}"
 # API total went down (/clear): start over.
 out=$(speed 1000 50)
 has   speed-reset       "$out" "⚡ ${DIM}--${RESET}"

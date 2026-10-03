@@ -104,6 +104,7 @@ PACE_WARN=80;  PACE_CRIT=100  # burn rate x100 (used% / elapsed%); 100 = lands e
 HIT_WARN=80;   HIT_CRIT=50    # prompt cache hit %; lower is worse (see sev_low)
 MISS_RECENT=600               # seconds a cache miss stays on screen
 SPEED_WARN=20; SPEED_CRIT=10  # output tok/s of the last response; lower is worse
+SPEED_MIN_TOKENS=200          # smaller responses restart "ago" but keep the last tok/s
 
 # sev VALUE WARN CRIT -> severity color for an integer where higher is worse.
 sev() {
@@ -210,8 +211,12 @@ case "$session_id" in
             if [ -z "$prev_api" ] || [ "$api_ms" -lt "$prev_api" ]; then
                 change_ts="$now" rate="-"
             elif [ "$api_ms" -gt "$prev_api" ]; then
-                change_ts="$now" rate="-"
-                [ "${out_tokens:-0}" -gt 0 ] && rate=$((out_tokens * 1000 / (api_ms - prev_api)))
+                # A response landed. A small one (tool call) is mostly the wait
+                # before the first token, so it restarts "ago" but keeps the speed.
+                change_ts="$now"
+                if [ "${out_tokens:-0}" -ge "$SPEED_MIN_TOKENS" ]; then
+                    rate=$((out_tokens * 1000 / (api_ms - prev_api)))
+                fi
             fi
             if [ "$api_ms" != "$prev_api" ]; then
                 { printf '%s %s %s\n' "$api_ms" "$change_ts" "$rate" > "$state.$$" && mv -f "$state.$$" "$state"; } 2>/dev/null || true
