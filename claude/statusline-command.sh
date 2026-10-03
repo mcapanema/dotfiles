@@ -27,16 +27,19 @@ fi
 unset LC_ALL
 export LC_NUMERIC=C
 
+# Empty stdin renders the "nothing reported yet" placeholders, not a blank line.
+input=$(cat)
+[ -n "$input" ] || input='{}'
+
 # One jq pass; @sh quotes every value so eval is safe on arbitrary strings.
 # Absent/null fields become ''. Note `false // ""` is also '' in jq.
-vars=$(jq -r '
+vars=$(printf '%s' "$input" | jq -r '
     @sh "model=\(.model.display_name // "Unknown Model")",
     @sh "effort=\(.effort.level // "")",
     @sh "fast=\(.fast_mode // "")",
     @sh "vim_mode=\(.vim.mode // "")",
     @sh "used=\(.context_window.used_percentage // "")",
     @sh "ctx_size=\(.context_window.context_window_size // "")",
-    @sh "over_200k=\(.exceeds_200k_tokens // "")",
     @sh "total_cost=\(.cost.total_cost_usd // "")",
     @sh "lines_added=\(.cost.total_lines_added // "")",
     @sh "lines_removed=\(.cost.total_lines_removed // "")",
@@ -113,13 +116,8 @@ if [ -n "$ctx_size" ]; then
     else
         size_display="$((ctx_size / 1000))k"
     fi
-    # Past 200k input tokens every request bills at the long-context premium.
-    if [ "$over_200k" = "true" ]; then
-        size_color="$CRIT"
-    else
-        size_color="$DIM"
-    fi
-    usage_str="${usage_str}${size_color}/${size_display}${RESET}"
+    # A label, not a gauge: the percentage already carries the severity.
+    usage_str="${usage_str}${DIM}/${size_display}${RESET}"
 fi
 
 if [ -n "$total_cost" ]; then

@@ -55,6 +55,9 @@ has   empty-model       "$out" "Unknown Model"
 has   empty-context     "$out" "${DIM}--%${RESET}"
 has   empty-cost        "$out" "${DIM}\$--${RESET}"
 has   empty-limits      "$out" "${DIM}7d --%${RESET}"
+out=$(printf '' | /bin/sh "$SCRIPT") || true
+has   empty-stdin-model "$out" "Unknown Model"
+has   empty-stdin-ctx   "$out" "${DIM}--%${RESET}"
 
 # --- shell metacharacters in reported strings are printed, never executed -----------------
 out=$(render '{"model":{"display_name":"It'"'"'s $(echo pwned) `id`"}}')
@@ -107,12 +110,14 @@ has   pace-late-warn    "$out" "${WARN}5h 85% →88% •"
 out=$(render "{\"rate_limits\":{\"five_hour\":{\"used_percentage\":30,\"resets_at\":$((now + 20000))}}}")
 has   pace-skew-raw     "$out" "${OK}5h 30% •"
 
-# --- context size, long-context premium, session churn ---------------------------------
+# --- context size (always dim: a label, not a gauge), session churn --------------------
 out=$(render "$(cat "$DIR/sample-claude-status.json")")
 has   fixture-ctx-size  "$out" "${CRIT}62%${RESET}${DIM}/200k${RESET}"
 has   fixture-churn     "$out" "📝 +342 -28"
 out=$(render '{"context_window":{"used_percentage":30,"context_window_size":1000000},"exceeds_200k_tokens":true}')
-has   ctx-1m-premium    "$out" "${OK}30%${RESET}${CRIT}/1M${RESET}"
+has   ctx-1m-dim        "$out" "${OK}30%${RESET}${DIM}/1M${RESET}"
+out=$(render '{"context_window":{"used_percentage":null,"context_window_size":200000}}')
+has   ctx-size-no-pct   "$out" "${DIM}--%${RESET}${DIM}/200k${RESET}"
 out=$(render '{"cost":{"total_lines_added":0,"total_lines_removed":0}}')
 lacks churn-zero        "$out" "📝"
 
