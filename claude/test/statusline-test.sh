@@ -167,12 +167,18 @@ lacks miss-old          "$out" "✗"
 
 # --- PR, fast mode, vim mode ----------------------------------------------------------
 out=$(render '{"pr":{"number":12,"url":"https://github.com/o/r/pull/12","review_state":"approved"},"vim":{"mode":"INSERT"},"fast_mode":true}')
-has   pr-approved       "$out" "${OK}#12 ✓${RESET}"
+has   pr-approved       "$out" "${OK}#12 [approved]${RESET}"
 has   pr-link           "$out" "${ESC}]8;;https://github.com/o/r/pull/12${ESC}\\"
 has   vim-insert        "$out" "[I] 🤖"
 has   fast-tag          "$out" "${P5}fast${RESET}"
 out=$(render '{"pr":{"number":7,"review_state":"changes_requested"},"fast_mode":false}')
-has   pr-changes        "$out" "${CRIT}#7 ✗${RESET}"
+has   pr-changes        "$out" "${CRIT}#7 [changes]${RESET}"
+out=$(render '{"pr":{"number":3,"review_state":"pending"}}')
+has   pr-review         "$out" "${WARN}#3 [review]${RESET}"
+out=$(render '{"pr":{"number":4,"review_state":"draft"}}')
+has   pr-draft          "$out" "${DIM}#4 [draft]${RESET}"
+out=$(render '{"pr":{"number":9}}')
+has   pr-open           "$out" "${DIM}#9 [open]${RESET}"
 lacks pr-no-link        "$out" "]8;;"
 lacks fast-off          "$out" "fast"
 out=$(render '{}')

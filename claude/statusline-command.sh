@@ -222,13 +222,13 @@ fi
 pr_str=""
 if [ -n "$pr_number" ]; then
     case "$pr_state" in
-        approved)          pr_color="$OK";   pr_mark=" ✓" ;;
-        changes_requested) pr_color="$CRIT"; pr_mark=" ✗" ;;
-        pending)           pr_color="$WARN"; pr_mark=" …" ;;
-        draft)             pr_color="$DIM";  pr_mark=" draft" ;;
-        *)                 pr_color="";      pr_mark="" ;;
+        approved)          pr_color="$OK";   pr_badge="approved" ;;
+        changes_requested) pr_color="$CRIT"; pr_badge="changes" ;;
+        pending)           pr_color="$WARN"; pr_badge="review" ;;
+        draft)             pr_color="$DIM";  pr_badge="draft" ;;
+        *)                 pr_color="$DIM";  pr_badge="open" ;;
     esac
-    pr_str="${pr_color}#${pr_number}${pr_mark}${RESET}"
+    pr_str="${pr_color}#${pr_number} [${pr_badge}]${RESET}"
     # OSC 8 hyperlink: Cmd+click opens the PR.
     [ -n "$pr_url" ] && pr_str="${ESC}]8;;${pr_url}${ESC}\\${pr_str}${ESC}]8;;${ESC}\\"
 fi
