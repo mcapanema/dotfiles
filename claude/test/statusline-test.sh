@@ -190,16 +190,17 @@ has   ctx-size-no-pct   "$out" "${DIM}--%${RESET}${DIM}/200k${RESET}"
 # --- prompt cache --------------------------------------------------------------------
 # expires_at carries a 30s pad so a slow run still rounds up to 5m.
 out=$(render "{\"prompt_cache\":{\"warm\":true,\"caching_observed\":true,\"expires_at\":$((now + 270)),\"hit_ratio\":0.92}}")
-has   cache-warm        "$out" "💾 ${OK}5m${RESET} • ${OK}92% hit${RESET}"
+has   cache-warm        "$out" "🔥 ${OK}5m${RESET} • ${OK}92% hit${RESET}"
 out=$(render "{\"prompt_cache\":{\"warm\":false,\"caching_observed\":true,\"expires_at\":$((now - 60)),\"hit_ratio\":0.4}}")
-has   cache-cold        "$out" "💾 ${WARN}cold${RESET} • ${CRIT}40% hit${RESET}"
+has   cache-cold        "$out" "🧊 ${WARN}cold${RESET} • ${CRIT}40% hit${RESET}"
 out=$(render "{\"prompt_cache\":{\"warm\":true,\"caching_observed\":true,\"expires_at\":$((now + 270)),\"hit_ratio\":0.7}}")
 has   cache-hit-warn    "$out" "• ${WARN}70% hit${RESET}"
 out=$(render '{"prompt_cache":{"warm":false,"caching_observed":false,"expires_at":null,"hit_ratio":null}}')
-lacks cache-unused      "$out" "💾"
+lacks cache-unused      "$out" "🔥"
+lacks cache-unused-ice  "$out" "🧊"
 # Recent miss (< 10m): cause + age in WARN. last_miss_at carries a 10s pad.
 out=$(render "{\"prompt_cache\":{\"warm\":true,\"caching_observed\":true,\"expires_at\":$((now + 270)),\"hit_ratio\":0.92,\"last_miss_at\":$((now - 130)),\"last_miss_cause\":{\"causes\":[\"tools_changed\"]}}}")
-has   miss-recent       "$out" "💾 ${OK}5m${RESET} • ${OK}92% hit${RESET} • ${WARN}✗ tools 2m ago${RESET}"
+has   miss-recent       "$out" "🔥 ${OK}5m${RESET} • ${OK}92% hit${RESET} • ${WARN}✗ tools 2m ago${RESET}"
 out=$(render "{\"prompt_cache\":{\"warm\":true,\"caching_observed\":true,\"expires_at\":$((now + 270)),\"last_miss_at\":$((now - 5)),\"last_miss_cause\":{\"causes\":[\"ttl_expired_5m\",\"system_prompt_changed\",\"likely_server_side\"]}}}")
 has   miss-causes       "$out" "${WARN}✗ prompt,server,ttl now${RESET}"
 out=$(render "{\"prompt_cache\":{\"warm\":true,\"caching_observed\":true,\"expires_at\":$((now + 270)),\"last_miss_at\":$((now - 60)),\"last_miss_cause\":{\"causes\":[\"new_cause_x\"]}}}")
@@ -212,6 +213,7 @@ lacks miss-old          "$out" "✗"
 # --- PR, fast mode, vim mode ----------------------------------------------------------
 out=$(render '{"pr":{"number":12,"url":"https://github.com/o/r/pull/12","review_state":"approved"},"vim":{"mode":"INSERT"},"fast_mode":true}')
 has   pr-approved       "$out" "${OK}#12 [approved]${RESET}"
+has   pr-icon           "$out" "| 🐙 ${ESC}]8;;"
 has   pr-link           "$out" "${ESC}]8;;https://github.com/o/r/pull/12${ESC}\\"
 has   vim-insert        "$out" "[I] 🤖"
 has   fast-tag          "$out" "${P5}fast${RESET}"
@@ -226,7 +228,7 @@ has   pr-open           "$out" "${DIM}#9 [open]${RESET}"
 lacks pr-no-link        "$out" "]8;;"
 lacks fast-off          "$out" "fast"
 out=$(render '{}')
-lacks pr-absent         "$out" "🔀"
+lacks pr-absent         "$out" "🐙"
 lacks vim-absent        "$out" "] 🤖"
 
 # --- settings: time-based segments refresh while idle; vim mode shown once ---------------
@@ -252,7 +254,7 @@ has   layout-l2-start   "$l2" "⌛ 3m | 💰 "
 has   layout-l2-speed-end "$l2" "${RESET} | ⚡ ${DIM}--${RESET}"
 lacks layout-l2-speed-mid "$l2" "⚡ ${DIM}--${RESET} |"
 out=$(render "{\"session_id\":\"lay\",\"cost\":{\"total_api_duration_ms\":1000},\"prompt_cache\":{\"warm\":true,\"caching_observed\":true,\"expires_at\":$((now + 270))}}")
-has   layout-l2-order   "$out" "💰 ${DIM}\$--${RESET} | 💾 ${OK}5m${RESET} | ⚡ ${DIM}--${RESET}"
+has   layout-l2-order   "$out" "💰 ${DIM}\$--${RESET} | 🔥 ${OK}5m${RESET} | ⚡ ${DIM}--${RESET}"
 has   layout-l3-start   "$l3" "📁 "
 lacks layout-no-4th     "$(printf '%s\n' "$out" | sed -n 4p)" "📁"
 out=$(render '{}')

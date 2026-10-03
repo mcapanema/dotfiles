@@ -175,10 +175,13 @@ else
 fi
 
 # Cold cache = the next turn re-bills the whole context at full input price.
+# The icon follows the state: 🔥 warm, 🧊 cold.
 cache_str=""
 if [ "$cache_warm" = "true" ] && [ -n "$cache_expires" ] && [ "$cache_expires" -gt "$now" ]; then
+    cache_icon="🔥"
     cache_str="${OK}$(((cache_expires - now + 59) / 60))m${RESET}"
 elif [ "$cache_seen" = "true" ]; then
+    cache_icon="🧊"
     cache_str="${WARN}cold${RESET}"
 fi
 if [ -n "$cache_str" ] && [ -n "$cache_hit" ]; then
@@ -357,10 +360,10 @@ line1="${line1} | 🧠 ${usage_str} | ⏱️ ${rate_limit_str}"
 
 line2="💰 ${cost_str}"
 [ -n "$duration_ms" ] && line2="⌛ $(dur $((duration_ms / 1000))) | ${line2}"
-[ -n "$cache_str" ] && line2="${line2} | 💾 ${cache_str}"
+[ -n "$cache_str" ] && line2="${line2} | ${cache_icon} ${cache_str}"
 [ -n "$speed_str" ] && line2="${line2} | ⚡ ${speed_str}"
 
 line3="📁 ${dir_display} | 🌳 ${worktree_str} | 🌿 ${git_str}"
-[ -n "$pr_str" ] && line3="${line3} | 🔀 ${pr_str}"
+[ -n "$pr_str" ] && line3="${line3} | 🐙 ${pr_str}"
 
 printf '%s\n%s\n%s' "$line1" "$line2" "$line3"
