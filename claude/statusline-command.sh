@@ -38,6 +38,10 @@ vars=$(jq -r '
     @sh "total_cost=\(.cost.total_cost_usd // "")",
     @sh "lines_added=\(.cost.total_lines_added // "")",
     @sh "lines_removed=\(.cost.total_lines_removed // "")",
+    @sh "cache_warm=\(.prompt_cache.warm // "")",
+    @sh "cache_expires=\(.prompt_cache.expires_at // "")",
+    @sh "cache_hit=\(.prompt_cache.hit_ratio // "")",
+    @sh "cache_seen=\(.prompt_cache.caching_observed // "")",
     @sh "worktree=\(.worktree.name // "")",
     @sh "current_dir=\(.worktree.original_cwd // .workspace.project_dir // .cwd // "")",
     @sh "rl_5h_pct=\(.rate_limits.five_hour.used_percentage // "")",
@@ -119,6 +123,17 @@ if [ -n "$total_cost" ]; then
     cost_str="$(sev "$cost_whole" "$COST_WARN" "$COST_CRIT")\$${cost_display}${RESET}"
 else
     cost_str="${DIM}\$--${RESET}"
+fi
+
+# Cold cache = the next turn re-bills the whole context at full input price.
+cache_str=""
+if [ "$cache_warm" = "true" ] && [ -n "$cache_expires" ] && [ "$cache_expires" -gt "$now" ]; then
+    cache_str="${OK}$(((cache_expires - now + 59) / 60))m${RESET}"
+elif [ "$cache_seen" = "true" ]; then
+    cache_str="${WARN}cold${RESET}"
+fi
+if [ -n "$cache_str" ] && [ -n "$cache_hit" ]; then
+    cache_str="${cache_str} $(awk "BEGIN { printf \"%.0f\", $cache_hit * 100 }")% hit"
 fi
 
 if [ -n "$worktree" ]; then
@@ -203,6 +218,7 @@ model_str="$(power "$model")${model}${RESET}"
 line1="🤖 ${model_str}"
 [ -n "$effort" ] && line1="${line1} | 💪 $(power "$effort")${effort}${RESET}"
 line1="${line1} | 🧠 ${usage_str} | 💰 ${cost_str}"
+[ -n "$cache_str" ] && line1="${line1} | 💾 ${cache_str}"
 line1="${line1} | ⏱️ ${rate_limit_str}"
 
 line2="📁 ${dir_display} | 🌳 ${worktree_str} | 🌿 ${git_str}"

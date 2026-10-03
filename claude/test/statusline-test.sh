@@ -116,6 +116,15 @@ has   ctx-1m-premium    "$out" "${OK}30%${RESET}${CRIT}/1M${RESET}"
 out=$(render '{"cost":{"total_lines_added":0,"total_lines_removed":0}}')
 lacks churn-zero        "$out" "📝"
 
+# --- prompt cache --------------------------------------------------------------------
+# expires_at carries a 30s pad so a slow run still rounds up to 5m.
+out=$(render "{\"prompt_cache\":{\"warm\":true,\"caching_observed\":true,\"expires_at\":$((now + 270)),\"hit_ratio\":0.92}}")
+has   cache-warm        "$out" "💾 ${OK}5m${RESET} 92% hit"
+out=$(render "{\"prompt_cache\":{\"warm\":false,\"caching_observed\":true,\"expires_at\":$((now - 60)),\"hit_ratio\":0.4}}")
+has   cache-cold        "$out" "💾 ${WARN}cold${RESET} 40% hit"
+out=$(render '{"prompt_cache":{"warm":false,"caching_observed":false,"expires_at":null,"hit_ratio":null}}')
+lacks cache-unused      "$out" "💾"
+
 if [ "$fails" -gt 0 ]; then
     echo "$fails check(s) failed"
     exit 1
