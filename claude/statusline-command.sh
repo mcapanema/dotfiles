@@ -104,6 +104,7 @@ PACE_WARN=80;  PACE_CRIT=100  # burn rate x100 (used% / elapsed%); 100 = lands e
 HIT_WARN=80;   HIT_CRIT=50    # prompt cache hit %; lower is worse (see sev_low)
 MISS_RECENT=600               # seconds a cache miss stays on screen
 SPEED_WARN=20; SPEED_CRIT=10  # output tok/s of the last response; lower is worse
+SPEED_MIN_TOKENS=200          # smaller responses restart "ago" but keep the last tok/s
 
 # sev VALUE WARN CRIT -> severity color for an integer where higher is worse.
 sev() {
@@ -174,10 +175,13 @@ else
 fi
 
 # Cold cache = the next turn re-bills the whole context at full input price.
+# The icon follows the state: 🔥 warm, 🧊 cold.
 cache_str=""
 if [ "$cache_warm" = "true" ] && [ -n "$cache_expires" ] && [ "$cache_expires" -gt "$now" ]; then
+    cache_icon="🔥"
     cache_str="${OK}$(((cache_expires - now + 59) / 60))m${RESET}"
 elif [ "$cache_seen" = "true" ]; then
+    cache_icon="🧊"
     cache_str="${WARN}cold${RESET}"
 fi
 if [ -n "$cache_str" ] && [ -n "$cache_hit" ]; then
@@ -210,8 +214,12 @@ case "$session_id" in
             if [ -z "$prev_api" ] || [ "$api_ms" -lt "$prev_api" ]; then
                 change_ts="$now" rate="-"
             elif [ "$api_ms" -gt "$prev_api" ]; then
-                change_ts="$now" rate="-"
-                [ "${out_tokens:-0}" -gt 0 ] && rate=$((out_tokens * 1000 / (api_ms - prev_api)))
+                # A response landed. A small one (tool call) is mostly the wait
+                # before the first token, so it restarts "ago" but keeps the speed.
+                change_ts="$now"
+                if [ "${out_tokens:-0}" -ge "$SPEED_MIN_TOKENS" ]; then
+                    rate=$((out_tokens * 1000 / (api_ms - prev_api)))
+                fi
             fi
             if [ "$api_ms" != "$prev_api" ]; then
                 { printf '%s %s %s\n' "$api_ms" "$change_ts" "$rate" > "$state.$$" && mv -f "$state.$$" "$state"; } 2>/dev/null || true
@@ -352,10 +360,10 @@ line1="${line1} | 🧠 ${usage_str} | ⏱️ ${rate_limit_str}"
 
 line2="💰 ${cost_str}"
 [ -n "$duration_ms" ] && line2="⌛ $(dur $((duration_ms / 1000))) | ${line2}"
-[ -n "$cache_str" ] && line2="${line2} | 💾 ${cache_str}"
+[ -n "$cache_str" ] && line2="${line2} | ${cache_icon} ${cache_str}"
 [ -n "$speed_str" ] && line2="${line2} | ⚡ ${speed_str}"
 
 line3="📁 ${dir_display} | 🌳 ${worktree_str} | 🌿 ${git_str}"
-[ -n "$pr_str" ] && line3="${line3} | 🔀 ${pr_str}"
+[ -n "$pr_str" ] && line3="${line3} | 🐙 ${pr_str}"
 
 printf '%s\n%s\n%s' "$line1" "$line2" "$line3"

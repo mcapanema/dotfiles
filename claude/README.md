@@ -46,8 +46,8 @@ The statusline is configured in `config/settings.json`:
 
 ```
 [I] 🤖 Opus 5.5 fast | 💪 max | 🧠 45%/1M | ⏱️ 5h 64% • ×3.8 • 10:15PM (4h9m) | 7d 30% • ×0.6 • Wed 5:26AM
-⌛ 1h12m | 💰 $12.50 | 💾 60m • 92% hit • ✗ tools 2m ago | ⚡ 41 tok/s • 8s ago
-📁 dotfiles | 🌳 no worktree | 🌿 main ↑1 ↓2 +1 ~2 ?3 | 🔀 #5 [review]
+⌛ 1h12m | 💰 $12.50 | 🔥 60m • 92% hit • ✗ tools 2m ago | ⚡ 41 tok/s • 8s ago
+📁 dotfiles | 🌳 no worktree | 🌿 main ↑1 ↓2 +1 ~2 ?3 | 🐙 #5 [review]
 ```
 
 Line 1 is the session (model and limits), line 2 is time and spend, line 3 is the repository. A segment Claude Code has not reported yet is either dim (`--%`, `$--`, `⚡ --`) or left out. Missing, null, empty or wrongly typed fields are treated the same way, and input that isn't JSON renders the placeholders instead of a blank line, so the statusline always prints its three lines.
@@ -89,12 +89,12 @@ Most gauges are "higher is worse". Two are reversed, "lower is worse": cache hit
 | ⏱️ Limits | `5h 64% • ×3.8 • 10:15PM (4h9m)` | Subscription rate limits: usage, burn multiplier, reset time (5h window also shows a countdown; 7d shows the day). | see below |
 | ⌛ Duration | `1h12m` | Session wall-clock time; adds up across resumes. | none |
 | 💰 Cost | `$12.50` | Estimated session cost at API list price (resets on `/clear`). | yellow from $10, red from $30 |
-| 💾 Cache | `60m • 92% hit • ✗ tools 2m ago` | Prompt cache: time until it expires (or `cold`), hit ratio, and the cause of a recent miss. | see below |
+| 🔥 / 🧊 Cache | `60m • 92% hit • ✗ tools 2m ago` | Prompt cache: 🔥 warm (time until it expires) or 🧊 `cold`, then the hit ratio and the cause of a recent miss. | see below |
 | ⚡ Speed | `41 tok/s • 8s ago` | Speed of the latest response and how long since the model last replied. | see below |
 | 📁 Directory | `dotfiles` | Repository root name (the original directory when in a worktree). | none |
 | 🌳 Worktree | `no worktree` | Active Claude Code worktree name. | none |
 | 🌿 Git | `main ↑1 ↓2 +1 ~2 ?3` | Branch, commits ahead/behind upstream, staged/modified/untracked file counts. | `↓` yellow, `+` green, `~` and `?` yellow |
-| 🔀 PR | `#5 [review]` | Pull request for the branch; Cmd+click opens it. | `[approved]` green, `[review]` yellow, `[changes]` red, `[draft]`/`[open]` dim |
+| 🐙 PR | `#5 [review]` | Pull request for the branch; Cmd+click opens it. | `[approved]` green, `[review]` yellow, `[changes]` red, `[draft]`/`[open]` dim |
 
 #### Rate limits: `5h 64% • ×3.8 • 10:15PM (4h9m)`
 
@@ -106,9 +106,9 @@ Most gauges are "higher is worse". Two are reversed, "lower is worse": cache hit
 - **`10:15PM (4h9m)`** is when the window resets. Uncolored.
 - `5h --%` (dim) means no data: not a subscriber, before the first response, or the window already reset.
 
-#### Cache: `60m • 92% hit • ✗ tools 2m ago`
+#### Cache: `🔥 60m • 92% hit • ✗ tools 2m ago`
 
-- **`60m`** (green) is how long the prompt cache stays warm. **`cold`** (yellow) means it expired, so the next message re-bills the whole context at full price.
+- **`🔥 60m`** (green) is how long the prompt cache stays warm. **`🧊 cold`** (yellow) means it expired, so the next message re-bills the whole context at full price.
 - **`92% hit`** is the share of input read from the cache. Green from 80%, yellow below 80%, red below 50%.
 - **`✗ tools 2m ago`** (yellow) appears for 10 minutes after a cache miss and says why: `ttl` (cache expired), `tools` (tools or MCP servers changed), `prompt` (system prompt changed), `server`, or the raw cause name.
 
@@ -117,11 +117,12 @@ Most gauges are "higher is worse". Two are reversed, "lower is worse": cache hit
 Claude Code does not report a live speed, so the script compares each refresh with the previous one, keeping one small state file per session in `$TMPDIR`.
 
 - When the session's total API time grows, a response just finished: **tok/s** = that response's output tokens ÷ the API time added since the previous refresh, and **ago** restarts at 0s.
+- Responses under 200 output tokens (mostly tool calls) restart **ago** but keep the previous tok/s. Their API time is mostly the wait before the first token, so they would read as slow (often red) while things are moving fine.
 - While nothing new arrives, the 30s refresh keeps the speed and lets **ago** grow. If you're waiting on Claude and it keeps growing, the request is slow or stuck.
 - tok/s is green from 20, yellow below 20, red below 10. The age is always dim. The first refresh of a session shows `⚡ --`.
 
 It's an approximation:
-- The API time includes the wait before the first token, so short responses (tool calls) and large contexts read slower than the model actually generates.
+- The API time includes the wait before the first token, so large contexts read slower than the model actually generates. Short responses are skipped for this reason (see above).
 - If one refresh covers several API calls (fast tool loops, possibly subagents), the time adds up but only the last response's tokens count, so it reads slower.
 - Parallel sessions are independent (the state file is named after the session id). The same session open in two terminals shares the file and gives noisy readings.
 
@@ -138,6 +139,7 @@ All thresholds are named settings near the top of `statusline-command.sh`:
 | `HIT_WARN` / `HIT_CRIT` | 80 / 50 | cache hit % (lower is worse) |
 | `MISS_RECENT` | 600 | seconds a cache miss stays on screen |
 | `SPEED_WARN` / `SPEED_CRIT` | 20 / 10 | tok/s (lower is worse) |
+| `SPEED_MIN_TOKENS` | 200 | responses smaller than this don't update tok/s |
 
 ### Testing
 
