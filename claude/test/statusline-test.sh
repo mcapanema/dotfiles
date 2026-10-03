@@ -85,14 +85,28 @@ has   cost-crit         "$out" "${CRIT}\$45.00${RESET}"
 out=$(render "{\"rate_limits\":{\"five_hour\":{\"used_percentage\":30,\"resets_at\":$((now + 3600))}}}")
 has   limit-ok          "$out" "${OK}5h 30%${RESET} • ${OK}×0.4${RESET} •"
 
-# --- git counts are not padded by macOS wc -------------------------------------------------
+# --- git: branch, ahead/behind upstream, staged/modified/untracked --------------------------
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
-git -C "$tmp" init -q
-echo x > "$tmp/f"
-git -C "$tmp" add f
-out=$(cd "$tmp" && render '{}')
+gc() { git -c user.name=t -c user.email=t@t -c commit.gpgsign=false "$@"; }
+git init -q "$tmp/o"
+echo x > "$tmp/o/f"
+git -C "$tmp/o" add f
+out=$(cd "$tmp/o" && render '{}')
 has   git-staged        "$out" "${OK}+1${RESET}"
+lacks git-no-upstream   "$out" "↑"
+# Clone, then diverge by one commit each way, modify one file, add one untracked.
+gc -C "$tmp/o" commit -qm base
+git clone -q "$tmp/o" "$tmp/c"
+gc -C "$tmp/o" commit -q --allow-empty -m upstream
+gc -C "$tmp/c" commit -q --allow-empty -m local
+git -C "$tmp/c" fetch -q
+echo y >> "$tmp/c/f"
+echo z > "$tmp/c/new"
+out=$(cd "$tmp/c" && render '{}')
+has   git-ahead-behind  "$out" " ↑1 ${WARN}↓1${RESET}"
+has   git-modified      "$out" "${WARN}~1${RESET}"
+has   git-untracked     "$out" "${WARN}?1${RESET}"
 
 # --- rate limits: usage by raw %, burn multiplier (used% / elapsed%) colored apart ------
 # Offsets carry padding so a slow run cannot cross a rounding boundary.
@@ -158,6 +172,12 @@ lacks vim-absent        "$out" "] 🤖"
 settings=$(jq -c '.statusLine | {refreshInterval, hideVimModeIndicator}' "$DIR/../config/settings.json")
 has   settings-refresh  "$settings" '"refreshInterval":30'
 has   settings-vim-once "$settings" '"hideVimModeIndicator":true'
+
+# --- session duration --------------------------------------------------------------------------
+out=$(render '{"cost":{"total_cost_usd":0.5,"total_duration_ms":4320000}}')
+has   duration          "$out" "💰 ${OK}\$0.50${RESET} | ⌛ 1h12m"
+out=$(render '{}')
+lacks duration-absent   "$out" "⌛"
 
 if [ "$fails" -gt 0 ]; then
     echo "$fails check(s) failed"

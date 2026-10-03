@@ -41,6 +41,7 @@ vars=$(printf '%s' "$input" | jq -r '
     @sh "used=\(.context_window.used_percentage // "")",
     @sh "ctx_size=\(.context_window.context_window_size // "")",
     @sh "total_cost=\(.cost.total_cost_usd // "")",
+    @sh "duration_ms=\(.cost.total_duration_ms // "")",
     @sh "cache_warm=\(.prompt_cache.warm // "")",
     @sh "cache_expires=\(.prompt_cache.expires_at // "")",
     @sh "cache_hit=\(.prompt_cache.hit_ratio // "")",
@@ -166,17 +167,34 @@ else
     worktree_str="no worktree"
 fi
 
-git_str=""
-if git rev-parse --git-dir > /dev/null 2>&1; then
-    branch=$(git branch --show-current 2>/dev/null)
-    [ -z "$branch" ] && branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
-    # $(( )) strips the left padding macOS wc adds.
-    staged=$(($(git diff --cached --numstat 2>/dev/null | wc -l)))
-    modified=$(($(git diff --numstat 2>/dev/null | wc -l)))
+# One git call: branch, ahead/behind upstream, staged/modified/untracked counts.
+# Porcelain v2 lines: "# branch.head X", "# branch.ab +A -B", "1|2 XY ..." for
+# changed entries (X staged, Y worktree, "." = clean), "u ..." unmerged, "? path".
+git_info=$(git status --porcelain=v2 --branch 2>/dev/null | awk '
+    $2 == "branch.oid"  { oid = substr($3, 1, 7) }
+    $2 == "branch.head" { head = $3 }
+    $2 == "branch.ab"   { ahead = substr($3, 2); behind = substr($4, 2) }
+    $1 == "1" || $1 == "2" {
+        if (substr($2, 1, 1) != ".") staged++
+        if (substr($2, 2, 1) != ".") modified++
+    }
+    $1 == "u" { modified++ }
+    $1 == "?" { untracked++ }
+    END {
+        if (head == "") exit
+        if (head == "(detached)") head = oid
+        printf "%s %d %d %d %d %d", head, ahead, behind, staged, modified, untracked
+    }') || git_info=""
 
-    git_str="$branch"
-    [ "$staged" -gt 0 ] && git_str="${git_str} ${OK}+${staged}${RESET}"
-    [ "$modified" -gt 0 ] && git_str="${git_str} ${WARN}~${modified}${RESET}"
+if [ -n "$git_info" ]; then
+    # shellcheck disable=SC2086  # ref names cannot contain spaces
+    set -- $git_info
+    git_str="$1"
+    [ "$2" -gt 0 ] && git_str="${git_str} ↑$2"
+    [ "$3" -gt 0 ] && git_str="${git_str} ${WARN}↓$3${RESET}"
+    [ "$4" -gt 0 ] && git_str="${git_str} ${OK}+$4${RESET}"
+    [ "$5" -gt 0 ] && git_str="${git_str} ${WARN}~$5${RESET}"
+    [ "$6" -gt 0 ] && git_str="${git_str} ${WARN}?$6${RESET}"
 else
     git_str="no branch"
 fi
@@ -247,6 +265,7 @@ line1="🤖 ${model_str}"
 [ -n "$vim_mode" ] && line1="[$(printf '%.1s' "$vim_mode")] ${line1}"
 [ -n "$effort" ] && line1="${line1} | 💪 $(power "$effort")${effort}${RESET}"
 line1="${line1} | 🧠 ${usage_str} | 💰 ${cost_str}"
+[ -n "$duration_ms" ] && line1="${line1} | ⌛ $(dur $((${duration_ms%.*} / 1000)))"
 [ -n "$cache_str" ] && line1="${line1} | 💾 ${cache_str}"
 line1="${line1} | ⏱️ ${rate_limit_str}"
 
