@@ -15,7 +15,8 @@
   "[ruby]": { "editor.defaultFormatter": "Shopify.ruby-lsp" },
   "telemetry.telemetryLevel": "off",
   "workbench.startupEditor": "none",
-  "workbench.colorTheme": "Default Dark+",
+  "workbench.colorTheme": "Dark+",
   "git.confirmSync": false,
-  "git.autofetch": true
+  "git.autofetch": true,
+  "editor.unicodeHighlight.nonBasicASCII": false
 }
