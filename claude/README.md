@@ -47,7 +47,7 @@ The statusline is configured in `config/settings.json`:
 ```
 [I] 🤖 Opus 5.5 fast | 💪 max | 🧠 45%/1M | ⏱️ 5h 64% • ×3.8 • 10:15PM (4h9m) | 7d 30% • ×0.6 • Wed 5:26AM
 ⌛ 1h12m | 💰 $12.50 | 🔥 60m • 92% hit • ✗ tools 2m ago | ⚡ 41 tok/s • 8s ago
-📁 dotfiles | 🌳 no worktree | 🌿 main ↑1 ↓2 +1 ~2 ?3 | 🐙 #5 [review]
+📁 dotfiles | 🌳 no worktree | 🌿 main ↑1 ↓2 +1 ~2 ?3
 ```
 
 Line 1 is the session (model and limits), line 2 is time and spend, line 3 is the repository. A segment Claude Code has not reported yet is either dim (`--%`, `$--`, `⚡ --`) or left out. Missing, null, empty or wrongly typed fields are treated the same way, and input that isn't JSON renders the placeholders instead of a blank line, so the statusline always prints its three lines.
@@ -85,7 +85,7 @@ Most gauges are "higher is worse". Two are reversed, "lower is worse": cache hit
 | Vim mode | `[I]` | First letter of the vim mode (`N`ormal, `I`nsert, `V`isual). Only when vim mode is on. | none |
 | 🤖 Model | `Opus 5.5 fast` | Model name; `fast` when fast mode is on. | power: Haiku teal, Sonnet lavender, Opus/Fable magenta; `fast` magenta |
 | 💪 Effort | `max` | Reasoning effort. Absent for models without effort levels. | power: `low` teal, `medium` blue, `high` lavender, `xhigh` pink, `max` magenta |
-| 🧠 Context | `45%/1M` | Context window used, then the window size. | `%`: yellow from 40%, red from 60%. Size: always dim |
+| 🧠 Context | `45%/1M` | Context window used, then the window size. | `%`: yellow from 40%, red above 60%. Size: always dim |
 | ⏱️ Limits | `5h 64% • ×3.8 • 10:15PM (4h9m)` | Subscription rate limits: usage, burn multiplier, reset time (5h window also shows a countdown; 7d shows the day). | see below |
 | ⌛ Duration | `1h12m` | Session wall-clock time; adds up across resumes. | none |
 | 💰 Cost | `$12.50` | Estimated session cost at API list price (resets on `/clear`). | yellow from $10, red from $30 |
@@ -94,7 +94,6 @@ Most gauges are "higher is worse". Two are reversed, "lower is worse": cache hit
 | 📁 Directory | `dotfiles` | Repository root name (the original directory when in a worktree). | none |
 | 🌳 Worktree | `no worktree` | Active Claude Code worktree name. | none |
 | 🌿 Git | `main ↑1 ↓2 +1 ~2 ?3` | Branch, commits ahead/behind upstream, staged/modified/untracked file counts. | `↓` yellow, `+` green, `~` and `?` yellow |
-| 🐙 PR | `#5 [review]` | Pull request for the branch; Cmd+click opens it. | `[approved]` green, `[review]` yellow, `[changes]` red, `[draft]`/`[open]` dim |
 
 #### Rate limits: `5h 64% • ×3.8 • 10:15PM (4h9m)`
 
@@ -132,7 +131,7 @@ All thresholds are named settings near the top of `statusline-command.sh`:
 
 | Setting | Default | Controls |
 |---|---|---|
-| `CTX_WARN` / `CTX_CRIT` | 40 / 60 | context % |
+| `CTX_WARN` / `CTX_CRIT` | 40 / 61 | context % (red above 60) |
 | `COST_WARN` / `COST_CRIT` | 10 / 30 | session cost in USD |
 | `LIMIT_WARN` / `LIMIT_CRIT` | 60 / 80 | rate-limit usage % |
 | `PACE_WARN` / `PACE_CRIT` | 80 / 100 | burn multiplier ×100 (80 = `×0.8`) |

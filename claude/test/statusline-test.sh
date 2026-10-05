@@ -88,6 +88,17 @@ out=$(render '{"cost":{"total_cost_usd":12.5}}')
 has   cost-warn         "$out" "${WARN}\$12.50${RESET}"
 out=$(render '{"cost":{"total_cost_usd":45}}')
 has   cost-crit         "$out" "${CRIT}\$45.00${RESET}"
+# Context: yellow from 40%, red only above 60% (on the displayed integer).
+out=$(render '{"context_window":{"used_percentage":39}}')
+has   ctx-ok-39         "$out" "${OK}39%${RESET}"
+out=$(render '{"context_window":{"used_percentage":40}}')
+has   ctx-warn-40       "$out" "${WARN}40%${RESET}"
+out=$(render '{"context_window":{"used_percentage":60}}')
+has   ctx-warn-60       "$out" "${WARN}60%${RESET}"
+out=$(render '{"context_window":{"used_percentage":60.4}}')
+has   ctx-warn-60.4     "$out" "${WARN}60%${RESET}"
+out=$(render '{"context_window":{"used_percentage":61}}')
+has   ctx-crit-61       "$out" "${CRIT}61%${RESET}"
 out=$(render "{\"rate_limits\":{\"five_hour\":{\"used_percentage\":30,\"resets_at\":$((now + 3600))}}}")
 has   limit-ok          "$out" "${OK}5h 30%${RESET} • ${OK}×0.4${RESET} •"
 
@@ -210,25 +221,17 @@ has   miss-no-cause     "$out" "✗ miss 1m ago"
 out=$(render "{\"prompt_cache\":{\"warm\":true,\"caching_observed\":true,\"expires_at\":$((now + 270)),\"last_miss_at\":$((now - 900)),\"last_miss_cause\":{\"causes\":[\"tools_changed\"]}}}")
 lacks miss-old          "$out" "✗"
 
-# --- PR, fast mode, vim mode ----------------------------------------------------------
+# --- PR is never shown (Claude Code still sends it); fast mode, vim mode ----------------
 out=$(render '{"pr":{"number":12,"url":"https://github.com/o/r/pull/12","review_state":"approved"},"vim":{"mode":"INSERT"},"fast_mode":true}')
-has   pr-approved       "$out" "${OK}#12 [approved]${RESET}"
-has   pr-icon           "$out" "| 🐙 ${ESC}]8;;"
-has   pr-link           "$out" "${ESC}]8;;https://github.com/o/r/pull/12${ESC}\\"
+lacks pr-hidden         "$out" "🐙"
+lacks pr-no-number      "$out" "#12"
+lacks pr-no-link        "$out" "]8;;"
+lacks pr-no-badge       "$out" "approved"
 has   vim-insert        "$out" "[I] 🤖"
 has   fast-tag          "$out" "${P5}fast${RESET}"
-out=$(render '{"pr":{"number":7,"review_state":"changes_requested"},"fast_mode":false}')
-has   pr-changes        "$out" "${CRIT}#7 [changes]${RESET}"
-out=$(render '{"pr":{"number":3,"review_state":"pending"}}')
-has   pr-review         "$out" "${WARN}#3 [review]${RESET}"
-out=$(render '{"pr":{"number":4,"review_state":"draft"}}')
-has   pr-draft          "$out" "${DIM}#4 [draft]${RESET}"
-out=$(render '{"pr":{"number":9}}')
-has   pr-open           "$out" "${DIM}#9 [open]${RESET}"
-lacks pr-no-link        "$out" "]8;;"
+out=$(render '{"fast_mode":false}')
 lacks fast-off          "$out" "fast"
 out=$(render '{}')
-lacks pr-absent         "$out" "🐙"
 lacks vim-absent        "$out" "] 🤖"
 
 # --- settings: time-based segments refresh while idle; vim mode shown once ---------------
