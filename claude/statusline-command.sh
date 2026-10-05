@@ -97,7 +97,7 @@ P4="${ESC}[38;5;213m"  # pink
 P5="${ESC}[38;5;201m"  # magenta
 
 # Severity thresholds (warn, crit). Tune here; every gauge reads these.
-CTX_WARN=40;   CTX_CRIT=60    # % of context window; quality drops well before auto-compact
+CTX_WARN=40;   CTX_CRIT=61    # % of context window (red above 60); quality drops well before auto-compact
 COST_WARN=10;  COST_CRIT=30   # session USD
 LIMIT_WARN=60; LIMIT_CRIT=80  # % of a rate-limit window used so far
 PACE_WARN=80;  PACE_CRIT=100  # burn rate x100 (used% / elapsed%); 100 = lands exactly on the cap

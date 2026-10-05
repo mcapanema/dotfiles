@@ -88,6 +88,17 @@ out=$(render '{"cost":{"total_cost_usd":12.5}}')
 has   cost-warn         "$out" "${WARN}\$12.50${RESET}"
 out=$(render '{"cost":{"total_cost_usd":45}}')
 has   cost-crit         "$out" "${CRIT}\$45.00${RESET}"
+# Context: yellow from 40%, red only above 60% (on the displayed integer).
+out=$(render '{"context_window":{"used_percentage":39}}')
+has   ctx-ok-39         "$out" "${OK}39%${RESET}"
+out=$(render '{"context_window":{"used_percentage":40}}')
+has   ctx-warn-40       "$out" "${WARN}40%${RESET}"
+out=$(render '{"context_window":{"used_percentage":60}}')
+has   ctx-warn-60       "$out" "${WARN}60%${RESET}"
+out=$(render '{"context_window":{"used_percentage":60.4}}')
+has   ctx-warn-60.4     "$out" "${WARN}60%${RESET}"
+out=$(render '{"context_window":{"used_percentage":61}}')
+has   ctx-crit-61       "$out" "${CRIT}61%${RESET}"
 out=$(render "{\"rate_limits\":{\"five_hour\":{\"used_percentage\":30,\"resets_at\":$((now + 3600))}}}")
 has   limit-ok          "$out" "${OK}5h 30%${RESET} • ${OK}×0.4${RESET} •"
 
