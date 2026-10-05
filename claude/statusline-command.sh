@@ -67,9 +67,6 @@ JQ_PROG='
           else . end] | unique | join(","))",
     @sh "worktree=\(str(.worktree.name) // "")",
     @sh "current_dir=\(str(.worktree.original_cwd) // str(.workspace.project_dir) // str(.cwd) // "")",
-    @sh "pr_number=\((int(.pr.number) | select(. > 0)) // "")",
-    @sh "pr_url=\(str(.pr.url) // "")",
-    @sh "pr_state=\(str(.pr.review_state) // "")",
     @sh "rl_5h_pct=\(num(.rate_limits.five_hour.used_percentage) // "")",
     @sh "rl_5h_reset=\(int(.rate_limits.five_hour.resets_at) // "")",
     @sh "rl_7d_pct=\(num(.rate_limits.seven_day.used_percentage) // "")",
@@ -290,20 +287,6 @@ else
     git_str="no branch"
 fi
 
-pr_str=""
-if [ -n "$pr_number" ]; then
-    case "$pr_state" in
-        approved)          pr_color="$OK";   pr_badge="approved" ;;
-        changes_requested) pr_color="$CRIT"; pr_badge="changes" ;;
-        pending)           pr_color="$WARN"; pr_badge="review" ;;
-        draft)             pr_color="$DIM";  pr_badge="draft" ;;
-        *)                 pr_color="$DIM";  pr_badge="open" ;;
-    esac
-    pr_str="${pr_color}#${pr_number} [${pr_badge}]${RESET}"
-    # OSC 8 hyperlink: Cmd+click opens the PR.
-    [ -n "$pr_url" ] && pr_str="${ESC}]8;;${pr_url}${ESC}\\${pr_str}${ESC}]8;;${ESC}\\"
-fi
-
 # format_rl PCT RESET_TS LABEL WINDOW_SECONDS
 format_rl() {
     pct="$1"
@@ -364,6 +347,5 @@ line2="💰 ${cost_str}"
 [ -n "$speed_str" ] && line2="${line2} | ⚡ ${speed_str}"
 
 line3="📁 ${dir_display} | 🌳 ${worktree_str} | 🌿 ${git_str}"
-[ -n "$pr_str" ] && line3="${line3} | 🐙 ${pr_str}"
 
 printf '%s\n%s\n%s' "$line1" "$line2" "$line3"

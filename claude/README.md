@@ -47,7 +47,7 @@ The statusline is configured in `config/settings.json`:
 ```
 [I] 🤖 Opus 5.5 fast | 💪 max | 🧠 45%/1M | ⏱️ 5h 64% • ×3.8 • 10:15PM (4h9m) | 7d 30% • ×0.6 • Wed 5:26AM
 ⌛ 1h12m | 💰 $12.50 | 🔥 60m • 92% hit • ✗ tools 2m ago | ⚡ 41 tok/s • 8s ago
-📁 dotfiles | 🌳 no worktree | 🌿 main ↑1 ↓2 +1 ~2 ?3 | 🐙 #5 [review]
+📁 dotfiles | 🌳 no worktree | 🌿 main ↑1 ↓2 +1 ~2 ?3
 ```
 
 Line 1 is the session (model and limits), line 2 is time and spend, line 3 is the repository. A segment Claude Code has not reported yet is either dim (`--%`, `$--`, `⚡ --`) or left out. Missing, null, empty or wrongly typed fields are treated the same way, and input that isn't JSON renders the placeholders instead of a blank line, so the statusline always prints its three lines.
@@ -94,7 +94,6 @@ Most gauges are "higher is worse". Two are reversed, "lower is worse": cache hit
 | 📁 Directory | `dotfiles` | Repository root name (the original directory when in a worktree). | none |
 | 🌳 Worktree | `no worktree` | Active Claude Code worktree name. | none |
 | 🌿 Git | `main ↑1 ↓2 +1 ~2 ?3` | Branch, commits ahead/behind upstream, staged/modified/untracked file counts. | `↓` yellow, `+` green, `~` and `?` yellow |
-| 🐙 PR | `#5 [review]` | Pull request for the branch; Cmd+click opens it. | `[approved]` green, `[review]` yellow, `[changes]` red, `[draft]`/`[open]` dim |
 
 #### Rate limits: `5h 64% • ×3.8 • 10:15PM (4h9m)`
 
