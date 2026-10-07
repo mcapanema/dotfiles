@@ -45,7 +45,7 @@ The statusline is configured in `config/settings.json`:
 ### Layout
 
 ```
-[I] 🤖 Opus 5.5 fast | 💪 max | 🧠 45%/1M | ⏱️ 5h 64% • ×3.8 • 10:15PM (4h9m) | 7d 30% • ×0.6 • Wed 5:26AM
+[I] 🤖 Opus 5.5 fast | 💪 max | 🧠 45%/1M | ⏱️ 5h 64% • -47% • 10:15PM (4h9m) | 7d 30% • +20% • Wed 5:26AM
 ⌛ 1h12m | 💰 $12.50 | 🔥 60m • 92% hit • ✗ tools 2m ago | ⚡ 41 tok/s • 8s ago
 📁 dotfiles | 🌳 no worktree | 🌿 main ↑1 ↓2 +1 ~2 ?3
 ```
@@ -86,7 +86,7 @@ Most gauges are "higher is worse". Two are reversed, "lower is worse": cache hit
 | 🤖 Model | `Opus 5.5 fast` | Model name; `fast` when fast mode is on. | power: Haiku teal, Sonnet lavender, Opus/Fable magenta; `fast` magenta |
 | 💪 Effort | `max` | Reasoning effort. Absent for models without effort levels. | power: `low` teal, `medium` blue, `high` lavender, `xhigh` pink, `max` magenta |
 | 🧠 Context | `45%/1M` | Context window used, then the window size. | `%`: yellow from 40%, red above 60%. Size: always dim |
-| ⏱️ Limits | `5h 64% • ×3.8 • 10:15PM (4h9m)` | Subscription rate limits: usage, burn multiplier, reset time (5h window also shows a countdown; 7d shows the day). | see below |
+| ⏱️ Limits | `5h 64% • -47% • 10:15PM (4h9m)` | Subscription rate limits: usage, reserve (+) or deficit (-) against an even pace, reset time (5h window also shows a countdown; 7d shows the day). | see below |
 | ⌛ Duration | `1h12m` | Session wall-clock time; adds up across resumes. | none |
 | 💰 Cost | `$12.50` | Estimated session cost at API list price (resets on `/clear`). | yellow from $10, red from $30 |
 | 🔥 / 🧊 Cache | `60m • 92% hit • ✗ tools 2m ago` | Prompt cache: 🔥 warm (time until it expires) or 🧊 `cold`, then the hit ratio and the cause of a recent miss. | see below |
@@ -95,13 +95,13 @@ Most gauges are "higher is worse". Two are reversed, "lower is worse": cache hit
 | 🌳 Worktree | `no worktree` | Active Claude Code worktree name. | none |
 | 🌿 Git | `main ↑1 ↓2 +1 ~2 ?3` | Branch, commits ahead/behind upstream, staged/modified/untracked file counts. | `↓` yellow, `+` green, `~` and `?` yellow |
 
-#### Rate limits: `5h 64% • ×3.8 • 10:15PM (4h9m)`
+#### Rate limits: `5h 64% • -47% • 10:15PM (4h9m)`
 
 - **`5h 64%`** is how much of the window you've used. Yellow from 60%, red from 80%.
-- **`×3.8`** is the burn multiplier: used % ÷ elapsed % of the window. `×1.0` means you'll land exactly on 100% at the reset; `×3.8` means you're using it 3.8 times faster than that.
-  - Green below `×0.8`, yellow from `×0.8`, red from `×1.0` (you'll hit the cap before the reset at this pace).
+- **`-47%`** is your balance against an even pace, in points of the window: elapsed % − used %. 51 minutes into the 5h window is 17% elapsed; 64% used is 47 points over that, a **deficit** (`-`). Using less than the time gone is a **reserve** (`+20%`). `±0%` is exactly on pace.
+  - Colored by the burn rate (used % ÷ elapsed %): green below 80% of an even pace, yellow from 80%, red from 100%. Any deficit is red: at this pace you hit the cap before the reset.
   - Dim during the first 10% of the window, where one early burst would exaggerate it.
-  - Dim `×--` when it can't be computed (reset time further away than the window).
+  - Dim `--%` when it can't be computed (reset time further away than the window).
 - **`10:15PM (4h9m)`** is when the window resets. Uncolored.
 - `5h --%` (dim) means no data: not a subscriber, before the first response, or the window already reset.
 
@@ -134,7 +134,7 @@ All thresholds are named settings near the top of `statusline-command.sh`:
 | `CTX_WARN` / `CTX_CRIT` | 40 / 61 | context % (red above 60) |
 | `COST_WARN` / `COST_CRIT` | 10 / 30 | session cost in USD |
 | `LIMIT_WARN` / `LIMIT_CRIT` | 60 / 80 | rate-limit usage % |
-| `PACE_WARN` / `PACE_CRIT` | 80 / 100 | burn multiplier ×100 (80 = `×0.8`) |
+| `PACE_WARN` / `PACE_CRIT` | 80 / 100 | color of the +/- balance, by burn rate ×100 (80 = using 80% of an even pace) |
 | `HIT_WARN` / `HIT_CRIT` | 80 / 50 | cache hit % (lower is worse) |
 | `MISS_RECENT` | 600 | seconds a cache miss stays on screen |
 | `SPEED_WARN` / `SPEED_CRIT` | 20 / 10 | tok/s (lower is worse) |
