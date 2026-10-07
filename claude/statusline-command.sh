@@ -97,7 +97,7 @@ P5="${ESC}[38;5;201m"  # magenta
 CTX_WARN=40;   CTX_CRIT=61    # % of context window (red above 60); quality drops well before auto-compact
 COST_WARN=10;  COST_CRIT=30   # session USD
 LIMIT_WARN=60; LIMIT_CRIT=80  # % of a rate-limit window used so far
-PACE_WARN=80;  PACE_CRIT=100  # burn rate x100 (used% / elapsed%); 100 = lands exactly on the cap
+PACE_WARN=80;  PACE_CRIT=100  # burn rate x100 (used% / elapsed%) that colors the +/- balance; 100 = lands exactly on the cap
 HIT_WARN=80;   HIT_CRIT=50    # prompt cache hit %; lower is worse (see sev_low)
 MISS_RECENT=600               # seconds a cache miss stays on screen
 SPEED_WARN=20; SPEED_CRIT=10  # output tok/s of the last response; lower is worse
@@ -303,20 +303,29 @@ format_rl() {
     remaining=$((reset_ts - now))
     elapsed=$((window - remaining))
 
-    # Burn multiplier: used% / elapsed% of the window. x1.0 lands exactly on
-    # the cap at reset. DIM in the first 10% of the window, where one burst
-    # would extrapolate to nonsense; x-- when the clock makes it uncomputable.
+    # Balance: elapsed% - used% of the window, in points ahead of (+, reserve)
+    # or behind (-, deficit) an even pace. Colored by the burn rate (used% /
+    # elapsed%, x100), so a deficit is always CRIT. DIM in the first 10% of the
+    # window, where one burst would extrapolate to nonsense; --% when the clock
+    # makes it uncomputable.
     if [ "$elapsed" -le 0 ]; then
-        pace="${DIM}×--${RESET}"
+        pace="${DIM}--%${RESET}"
     else
         rate=$((pct * window / elapsed))
-        tenths=$(((pct * window + elapsed * 5) / (elapsed * 10)))
+        delta=$(((elapsed * 100 + window / 2) / window - pct))
+        if [ "$delta" -gt 0 ]; then
+            balance="+${delta}%"
+        elif [ "$delta" -lt 0 ]; then
+            balance="${delta}%"
+        else
+            balance="±0%"
+        fi
         if [ $((elapsed * 10)) -lt "$window" ]; then
             pace_color="$DIM"
         else
             pace_color=$(sev "$rate" "$PACE_WARN" "$PACE_CRIT")
         fi
-        pace="${pace_color}×$((tenths / 10)).$((tenths % 10))${RESET}"
+        pace="${pace_color}${balance}${RESET}"
     fi
 
     if [ "$label" = "7d" ]; then

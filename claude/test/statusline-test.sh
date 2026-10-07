@@ -100,7 +100,7 @@ has   ctx-warn-60.4     "$out" "${WARN}60%${RESET}"
 out=$(render '{"context_window":{"used_percentage":61}}')
 has   ctx-crit-61       "$out" "${CRIT}61%${RESET}"
 out=$(render "{\"rate_limits\":{\"five_hour\":{\"used_percentage\":30,\"resets_at\":$((now + 3600))}}}")
-has   limit-ok          "$out" "${OK}5h 30%${RESET} • ${OK}×0.4${RESET} •"
+has   limit-ok          "$out" "${OK}5h 30%${RESET} • ${OK}+50%${RESET} •"
 
 # --- git: branch, ahead/behind upstream, staged/modified/untracked --------------------------
 gc() { git -c user.name=t -c user.email=t@t -c commit.gpgsign=false "$@"; }
@@ -163,30 +163,41 @@ out=$(speed 2000 50 "../evil")
 lacks speed-bad-id      "$out" "⚡"
 [ ! -e "$tmp/../claude-statusline-evil" ] || { echo "FAIL speed-bad-id-path: state written outside TMPDIR"; fails=$((fails + 1)); }
 
-# --- rate limits: usage by raw %, burn multiplier (used% / elapsed%) colored apart ------
+# --- rate limits: usage by raw %, then the balance against an even pace -----------------
+# Balance = elapsed% - used%, in points of the window: +N% reserve, -N% deficit, ±0%.
+# Colored by the burn rate (used% / elapsed%), so a deficit is always CRIT.
 # Offsets carry padding so a slow run cannot cross a rounding boundary.
-# 60% used after 40% of the window -> x1.5: usage WARN, pace CRIT, reset uncolored.
+# 60% used after 40% of the window -> -20: usage WARN, balance CRIT, reset uncolored.
 out=$(render "{\"rate_limits\":{\"five_hour\":{\"used_percentage\":60,\"resets_at\":$((now + 10770))}}}")
-has   pace-5h-over      "$out" "${WARN}5h 60%${RESET} • ${CRIT}×1.5${RESET} •"
-lacks pace-no-reset-tint "$out" "${CRIT}×1.5${RESET} • ${ESC}"
-# 40% used after 2 of 7 days -> x1.4: usage OK, pace CRIT.
+has   pace-5h-over      "$out" "${WARN}5h 60%${RESET} • ${CRIT}-20%${RESET} •"
+lacks pace-no-reset-tint "$out" "${CRIT}-20%${RESET} • ${ESC}"
+lacks pace-no-multiplier "$out" "×"
+# Balance uses the displayed integer: 59.6 shows as 60%, so still -20.
+out=$(render "{\"rate_limits\":{\"five_hour\":{\"used_percentage\":59.6,\"resets_at\":$((now + 10770))}}}")
+has   pace-fraction     "$out" "${WARN}5h 60%${RESET} • ${CRIT}-20%${RESET} •"
+# 40% used after 2 of 7 days (29%) -> -11: usage OK, balance CRIT.
 out=$(render "{\"rate_limits\":{\"seven_day\":{\"used_percentage\":40,\"resets_at\":$((now + 432000))}}}")
-has   pace-7d-over      "$out" "${OK}7d 40%${RESET} • ${CRIT}×1.4${RESET} •"
-# 10% used after 1 of 7 days -> x0.7: never hidden, OK.
+has   pace-7d-over      "$out" "${OK}7d 40%${RESET} • ${CRIT}-11%${RESET} •"
+# 10% used after 1 of 7 days (14%) -> +4, burning at 0.7 of an even pace: OK.
 out=$(render "{\"rate_limits\":{\"seven_day\":{\"used_percentage\":10,\"resets_at\":$((now + 518415))}}}")
-has   pace-7d-ok        "$out" "${OK}7d 10%${RESET} • ${OK}×0.7${RESET} •"
-# 85% used, 10m left -> x0.9: usage CRIT, pace WARN.
+has   pace-7d-ok        "$out" "${OK}7d 10%${RESET} • ${OK}+4%${RESET} •"
+# 85% used, 10m left (96%) -> +11, burning at 0.9: usage CRIT, balance WARN.
 out=$(render "{\"rate_limits\":{\"five_hour\":{\"used_percentage\":85,\"resets_at\":$((now + 700))}}}")
-has   pace-late-warn    "$out" "${CRIT}5h 85%${RESET} • ${WARN}×0.9${RESET} •"
-# First 10% of the window: shown, but DIM (one burst would extrapolate to nonsense).
-out=$(render "{\"rate_limits\":{\"five_hour\":{\"used_percentage\":5,\"resets_at\":$((now + 17015))}}}")
-has   pace-early-dim    "$out" "${OK}5h 5%${RESET} • ${DIM}×0.9${RESET} •"
+has   pace-late-warn    "$out" "${CRIT}5h 85%${RESET} • ${WARN}+11%${RESET} •"
+# 50% used at 50% of the window (50.2%, rate 99 -> WARN): exactly on pace.
+out=$(render "{\"rate_limits\":{\"five_hour\":{\"used_percentage\":50,\"resets_at\":$((now + 8970))}}}")
+has   pace-on-pace      "$out" "${OK}5h 50%${RESET} • ${WARN}±0%${RESET} •"
+lacks pace-no-plus-zero "$out" "+0%"
+lacks pace-no-minus-zero "$out" "-0%"
+# First 10% of the window (2% used at 5%): shown, but DIM (one burst would extrapolate to nonsense).
+out=$(render "{\"rate_limits\":{\"five_hour\":{\"used_percentage\":2,\"resets_at\":$((now + 17100))}}}")
+has   pace-early-dim    "$out" "${OK}5h 2%${RESET} • ${DIM}+3%${RESET} •"
 # Clock skew: reset further away than the window itself -> cannot compute.
 out=$(render "{\"rate_limits\":{\"five_hour\":{\"used_percentage\":30,\"resets_at\":$((now + 20000))}}}")
-has   pace-skew         "$out" "${OK}5h 30%${RESET} • ${DIM}×--${RESET} •"
-# Already capped: multiplier still shown.
+has   pace-skew         "$out" "${OK}5h 30%${RESET} • ${DIM}--%${RESET} •"
+# Already capped (80% elapsed): balance still shown.
 out=$(render "{\"rate_limits\":{\"five_hour\":{\"used_percentage\":100,\"resets_at\":$((now + 3615))}}}")
-has   pace-capped       "$out" "${CRIT}5h 100%${RESET} • ${CRIT}×1.3${RESET} •"
+has   pace-capped       "$out" "${CRIT}5h 100%${RESET} • ${CRIT}-20%${RESET} •"
 lacks pace-no-warn-sign "$out" "⚠"
 
 # --- context size (always dim: a label, not a gauge); no session churn segment ---------
