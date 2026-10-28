@@ -38,7 +38,7 @@ set smartcase                  " Override ignorecase when pattern has uppercase
 set hidden                     " Allow hiding a buffer with unsaved changes without prompting
 
 " Mouse
-set mouse=a                    " Enable mouse in all modes
+set mouse=                     " Disable mouse support
 
 " ----------------------------------------------------------------------
 " User Interface
